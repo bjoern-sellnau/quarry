@@ -12,15 +12,15 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0a1018);
-scene.fog = new THREE.FogExp2(0x0a1018, 0.006);
+scene.background = new THREE.Color(0x18222e);
+scene.fog = new THREE.FogExp2(0x18222e, 0.0035);
 
 const camera = new THREE.PerspectiveCamera(78, window.innerWidth / window.innerHeight, 0.05, 1000);
 
-// Lighting: bright-ish ambient + a strong headlamp that follows the ship.
-scene.add(new THREE.AmbientLight(0x8090a0, 1.4));
-scene.add(new THREE.HemisphereLight(0xbfe6ff, 0x202830, 0.9));
-const headlamp = new THREE.PointLight(0xcfeaff, 2.6, 120, 1.2);
+// Lighting: bright ambient + a strong headlamp that follows the ship.
+scene.add(new THREE.AmbientLight(0xb0c0d0, 2.2));
+scene.add(new THREE.HemisphereLight(0xdaf2ff, 0x3a4450, 1.4));
+const headlamp = new THREE.PointLight(0xe6f4ff, 3.4, 160, 1.0);
 scene.add(headlamp);
 
 const input = new Input(canvas);
@@ -29,7 +29,7 @@ level.build(scene);
 
 // A bright fill light in every chamber so rooms read clearly.
 for (const cell of level.cells) {
-  const l = new THREE.PointLight(0x9fd6e6, 1.8, 120);
+  const l = new THREE.PointLight(0xc8e8f2, 2.6, 160);
   l.position.copy(cell.center);
   scene.add(l);
 }
