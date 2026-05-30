@@ -18,15 +18,15 @@ const FACES = {
 // Cell layout. Each cell is a box [min..max]. Cells that share a face plane
 // (and overlap on it) become connected by a doorway automatically.
 const CELLS = [
-  { min: [-15, -12, -15], max: [15, 12, 15], color: 0x12303a },   // 0 start chamber
-  { min: [-4, -4, -45], max: [4, 4, -15], color: 0x0e2630 },      // 1 tunnel A->B (-z)
-  { min: [-18, -14, -75], max: [18, 14, -45], color: 0x143542 },  // 2 chamber B
-  { min: [18, -4, -64], max: [48, 4, -56], color: 0x0e2630 },     // 3 tunnel B->C (+x)
-  { min: [48, -16, -78], max: [84, 16, -42], color: 0x16323d },   // 4 chamber C (arena)
-  { min: [15, -4, -4], max: [45, 4, 4], color: 0x0e2630 },        // 5 tunnel A->D (+x)
-  { min: [45, -12, -20], max: [75, 12, 16], color: 0x143542 },    // 6 chamber D
-  { min: [58, 16, -68], max: [70, 40, -52], color: 0x0e2630 },    // 7 vertical shaft (+y from C)
-  { min: [50, 40, -76], max: [86, 72, -44], color: 0x16323d },    // 8 high chamber E
+  { min: [-15, -12, -15], max: [15, 12, 15], color: 0x4a6878 },   // 0 start chamber
+  { min: [-4, -4, -45], max: [4, 4, -15], color: 0x3c5866 },      // 1 tunnel A->B (-z)
+  { min: [-18, -14, -75], max: [18, 14, -45], color: 0x4f6d7c },  // 2 chamber B
+  { min: [18, -4, -64], max: [48, 4, -56], color: 0x3c5866 },     // 3 tunnel B->C (+x)
+  { min: [48, -16, -78], max: [84, 16, -42], color: 0x556a78 },   // 4 chamber C (arena)
+  { min: [15, -4, -4], max: [45, 4, 4], color: 0x3c5866 },        // 5 tunnel A->D (+x)
+  { min: [45, -12, -20], max: [75, 12, 16], color: 0x4f6d7c },    // 6 chamber D
+  { min: [58, 16, -68], max: [70, 40, -52], color: 0x3c5866 },    // 7 vertical shaft (+y from C)
+  { min: [50, 40, -76], max: [86, 72, -44], color: 0x556a78 },    // 8 high chamber E
 ];
 
 export class Level {
@@ -81,11 +81,12 @@ export class Level {
     for (const cell of this.cells) {
       const mat = new THREE.MeshStandardMaterial({
         color: cell.color,
-        roughness: 0.85,
-        metalness: 0.25,
+        roughness: 0.7,
+        metalness: 0.2,
+        emissive: new THREE.Color(cell.color).multiplyScalar(0.15),
         side: THREE.DoubleSide,
       });
-      const lineMat = new THREE.LineBasicMaterial({ color: 0x2c6b7a, transparent: true, opacity: 0.5 });
+      const lineMat = new THREE.LineBasicMaterial({ color: 0x7fd4e6, transparent: true, opacity: 0.7 });
 
       for (const key of Object.keys(FACES)) {
         const quads = this._faceQuads(cell, key);
