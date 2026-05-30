@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QUARRY — 6DOF Shooter</title>
+  <link rel="stylesheet" href="src/style.css" />
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div id="crosshair">
+      <div class="ch-line ch-h"></div>
+      <div class="ch-line ch-v"></div>
+      <div class="ch-dot"></div>
+    </div>
+
+    <div id="hud-top">
+      <div class="hud-stat">
+        <span class="hud-label">SCORE</span>
+        <span id="score">0</span>
+      </div>
+      <div class="hud-stat">
+        <span class="hud-label">ROBOTS</span>
+        <span id="enemies">0</span>
+      </div>
+    </div>
+
+    <div id="hud-bottom">
+      <div class="bar-group">
+        <span class="hud-label">HULL</span>
+        <div class="bar"><div id="hull-bar" class="bar-fill hull"></div></div>
+      </div>
+      <div class="bar-group">
+        <span class="hud-label">SHIELD</span>
+        <div class="bar"><div id="shield-bar" class="bar-fill shield"></div></div>
+      </div>
+    </div>
+
+    <div id="damage-flash"></div>
+  </div>
+
+  <!-- Overlay screens -->
+  <div id="overlay">
+    <div class="panel">
+      <h1 class="logo">QUARRY</h1>
+      <p class="tag">a 6-degrees-of-freedom mining-tunnel shooter</p>
+
+      <div id="screen-start">
+        <div class="controls">
+          <div class="ctrl-col">
+            <h3>FLIGHT</h3>
+            <div><kbd>W</kbd><kbd>S</kbd> Schub vor / zurück</div>
+            <div><kbd>A</kbd><kbd>D</kbd> Strafe links / rechts</div>
+            <div><kbd>Space</kbd><kbd>Ctrl</kbd> Strafe hoch / runter</div>
+            <div><kbd>Q</kbd><kbd>E</kbd> Roll links / rechts</div>
+            <div><kbd>Maus</kbd> Pitch / Yaw (Zielen)</div>
+          </div>
+          <div class="ctrl-col">
+            <h3>COMBAT</h3>
+            <div><kbd>Linke Maus</kbd> Laser feuern</div>
+            <div><kbd>Shift</kbd> Boost</div>
+            <div><kbd>Esc</kbd> Maus freigeben</div>
+            <div class="hint">Zerstöre alle Roboter, ohne abgeschossen zu werden.</div>
+          </div>
+        </div>
+        <button id="btn-start" class="btn">FLUG STARTEN</button>
+        <p class="lock-note">Klick aktiviert die Maussteuerung (Pointer Lock).</p>
+      </div>
+
+      <div id="screen-end" class="hidden">
+        <h2 id="end-title">MISSION</h2>
+        <p id="end-msg"></p>
+        <p class="final">SCORE: <span id="final-score">0</span></p>
+        <button id="btn-restart" class="btn">NEUSTART</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+    }
+  }
+  </script>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

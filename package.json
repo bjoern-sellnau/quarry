@@ -1,0 +1,11 @@
+{
+  "name": "quarry",
+  "version": "0.1.0",
+  "description": "QUARRY - a 6 degrees-of-freedom mining-tunnel shooter in the spirit of Descent",
+  "type": "module",
+  "scripts": {
+    "start": "npx --yes serve -l 8080 .",
+    "dev": "npx --yes serve -l 8080 ."
+  },
+  "license": "MIT"
+}
