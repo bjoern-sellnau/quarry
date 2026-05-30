@@ -215,3 +215,5 @@ window.addEventListener('resize', () => {
 canvas.addEventListener('click', () => {
   if (state === 'playing' && !input.locked) input.requestLock();
 });
+
+// build stamp auto-bumps via .githooks/pre-commit
