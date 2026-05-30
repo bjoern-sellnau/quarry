@@ -23,6 +23,19 @@ html, body {
 
 .hidden { display: none !important; }
 
+/* ---------- Build stamp ---------- */
+#build-stamp {
+  position: fixed;
+  bottom: 6px;
+  right: 10px;
+  z-index: 30;
+  pointer-events: none;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: rgba(54, 224, 255, 0.45);
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+}
+
 /* ---------- HUD ---------- */
 #hud {
   position: fixed;

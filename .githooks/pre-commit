@@ -1,0 +1,12 @@
+#!/bin/sh
+# Auto-bump the build number whenever game files are part of the commit.
+# Enable once with:  git config core.hooksPath .githooks
+
+# Only bump if something other than index.html itself is staged (avoid loops),
+# i.e. real game changes in src/, index.html content, or styles.
+changed=$(git diff --cached --name-only)
+echo "$changed" | grep -qE '^(src/|index\.html$|README\.md$)' || exit 0
+
+node scripts/bump-build.mjs || exit 1
+git add index.html
+exit 0
