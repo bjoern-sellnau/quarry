@@ -128,7 +128,11 @@ export class Ship {
     this.fireCooldown -= dt;
     if (input.firing && this.fireCooldown <= 0 && this.alive) {
       this.fireCooldown = this.fireRate;
-      fireCallback(this.position.clone(), this.forward(), this.quaternion.clone());
+      const dir = this.forward();
+      // Spawn the bolt ahead of the ship so it doesn't flash over the camera
+      // (and can never collide with the player itself).
+      const muzzle = this.position.clone().addScaledVector(dir, this.radius + 2.5);
+      fireCallback(muzzle, dir, this.quaternion.clone());
     }
 
     // ---- Sync camera ----

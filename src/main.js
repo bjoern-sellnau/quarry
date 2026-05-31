@@ -12,24 +12,24 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x18222e);
-scene.fog = new THREE.FogExp2(0x18222e, 0.0035);
+scene.background = new THREE.Color(0x0e151d);
+scene.fog = new THREE.FogExp2(0x0e151d, 0.005);
 
 const camera = new THREE.PerspectiveCamera(78, window.innerWidth / window.innerHeight, 0.05, 1000);
 
-// Lighting: bright ambient + a strong headlamp that follows the ship.
-scene.add(new THREE.AmbientLight(0xb0c0d0, 2.2));
-scene.add(new THREE.HemisphereLight(0xdaf2ff, 0x3a4450, 1.4));
-const headlamp = new THREE.PointLight(0xe6f4ff, 3.4, 160, 1.0);
+// Lighting: moderate ambient + a headlamp that follows the ship.
+scene.add(new THREE.AmbientLight(0x90a0b0, 1.5));
+scene.add(new THREE.HemisphereLight(0xbfe0f0, 0x2a3440, 1.0));
+const headlamp = new THREE.PointLight(0xdaf0ff, 2.6, 130, 1.1);
 scene.add(headlamp);
 
 const input = new Input(canvas);
 const level = new Level();
 level.build(scene);
 
-// A bright fill light in every chamber so rooms read clearly.
+// A fill light in every chamber so rooms read clearly.
 for (const cell of level.cells) {
-  const l = new THREE.PointLight(0xc8e8f2, 2.6, 160);
+  const l = new THREE.PointLight(0xafd8e6, 1.9, 130);
   l.position.copy(cell.center);
   scene.add(l);
 }
@@ -117,7 +117,8 @@ function resolveHits() {
           break;
         }
       }
-    } else {
+    } else if (p.owner === 'enemy') {
+      // Only enemy bolts can hurt the player — player shots never self-damage.
       if (ship.alive && ppos.distanceTo(ship.position) < ship.radius + p.radius) {
         ship.takeDamage(p.damage);
         hud.damageFlash();

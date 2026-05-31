@@ -27,7 +27,7 @@ export class Projectiles {
       mesh.quaternion.setFromUnitVectors(Z, dir.clone().normalize());
     }
 
-    const light = new THREE.PointLight(isPlayer ? 0x6cff7a : 0xff5a3c, 6, 12);
+    const light = new THREE.PointLight(isPlayer ? 0x6cff7a : 0xff5a3c, 2.5, 8);
     mesh.add(light);
 
     this.scene.add(mesh);
