@@ -93,6 +93,19 @@ html, body {
 }
 #damage-flash.show { opacity: 1; transition: none; }
 
+#toast {
+  position: absolute;
+  left: 50%; top: 64%;
+  transform: translate(-50%, 0) scale(0.9);
+  padding: 8px 22px;
+  font-size: 18px; letter-spacing: 3px;
+  color: #04060a; background: var(--accent);
+  border-radius: 3px; box-shadow: 0 0 24px var(--accent);
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+#toast.show { opacity: 0.95; transform: translate(-50%, -10px) scale(1); }
+
 /* ---------- Overlay ---------- */
 #overlay {
   position: fixed; inset: 0; z-index: 20;

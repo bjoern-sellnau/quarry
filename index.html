@@ -10,7 +10,7 @@
   <canvas id="game"></canvas>
 
   <!-- Build/version stamp (bumped on every build) -->
-  <div id="build-stamp">quarry | pre-alpha | build 0.18</div>
+  <div id="build-stamp">quarry | pre-alpha | build 0.19</div>
 
   <!-- HUD -->
   <div id="hud" class="hidden">
@@ -29,6 +29,10 @@
         <span class="hud-label">ROBOTS</span>
         <span id="enemies">0</span>
       </div>
+      <div class="hud-stat">
+        <span class="hud-label">SECRETS</span>
+        <span id="secrets">0/0</span>
+      </div>
     </div>
 
     <div id="hud-bottom">
@@ -42,6 +46,7 @@
       </div>
     </div>
 
+    <div id="toast"></div>
     <div id="damage-flash"></div>
   </div>
 

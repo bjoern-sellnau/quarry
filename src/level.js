@@ -27,6 +27,12 @@ const CELLS = [
   { min: [45, -12, -20], max: [75, 12, 16], color: 0x607582 },    // 6 chamber D
   { min: [58, 16, -68], max: [70, 40, -52], color: 0x4e636f },    // 7 vertical shaft (+y from C)
   { min: [50, 40, -76], max: [86, 72, -44], color: 0x687784 },    // 8 high chamber E
+
+  // --- Secret areas: reached through small, easy-to-miss doorways. ---
+  { min: [-30, -3, -60], max: [-18, 3, -54], color: 0x3a4a40 },   // 9 secret crawlway off chamber B (-x)
+  { min: [-52, -10, -67], max: [-30, 10, -47], color: 0x2f4538, secret: true }, // 10 SECRET vault A
+  { min: [75, -3, -6], max: [90, 3, 2], color: 0x3a4a40 },        // 11 secret crawlway off chamber D (+x)
+  { min: [90, -10, -16], max: [110, 10, 12], color: 0x2f4538, secret: true },   // 12 SECRET vault B
 ];
 
 export class Level {
@@ -41,6 +47,7 @@ export class Level {
         (c.min[2] + c.max[2]) / 2,
       ),
       color: c.color,
+      secret: !!c.secret,
       openings: { '+x': [], '-x': [], '+y': [], '-y': [], '+z': [], '-z': [] },
     }));
     this._computeOpenings();

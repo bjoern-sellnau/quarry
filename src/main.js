@@ -2,8 +2,9 @@ import * as THREE from 'three';
 import { Input } from './input.js';
 import { Ship } from './ship.js';
 import { Level } from './level.js';
-import { Projectiles } from './weapons.js';
+import { Projectiles, distSqPointSegment } from './weapons.js';
 import { Enemy } from './enemies.js';
+import { Pickups, PICKUP_TYPES } from './pickups.js';
 import { Hud } from './hud.js';
 
 const canvas = document.getElementById('game');
@@ -36,11 +37,14 @@ for (const cell of level.cells) {
 
 const ship = new Ship(camera, input);
 const projectiles = new Projectiles(scene, level);
+const pickups = new Pickups(scene);
 const hud = new Hud();
 
 let enemies = [];
 let explosions = [];
 let score = 0;
+let secretsFound = 0;
+let secretsTotal = 0;
 let state = 'menu'; // menu | playing | over
 const shipCellState = {};
 
@@ -59,6 +63,58 @@ function spawnEnemies() {
       THREE.MathUtils.lerp(cell.min.z + 3, cell.max.z - 3, Math.random()),
     );
     enemies.push(new Enemy(scene, pos));
+  }
+}
+
+// ---------- Pickups & secrets ----------
+function spawnPickups() {
+  pickups.clear();
+  secretsFound = 0;
+  secretsTotal = 0;
+
+  // Scatter a few support pickups through the main chambers.
+  const scatter = [
+    { type: 'shield', cell: 2 },
+    { type: 'hull', cell: 4 },
+    { type: 'shield', cell: 6 },
+    { type: 'hull', cell: 8 },
+  ];
+  for (const s of scatter) {
+    pickups.spawn(s.type, level.cells[s.cell].center.clone());
+  }
+
+  // Place an artifact in every secret vault. These count as the level's secrets.
+  for (const cell of level.cells) {
+    if (cell.secret) {
+      secretsTotal++;
+      pickups.spawn('artifact', cell.center.clone(), { secret: true });
+    }
+  }
+  hud.setSecrets(secretsFound, secretsTotal);
+}
+
+// Chance for a destroyed enemy to drop a support pickup.
+function maybeDropPickup(pos) {
+  const r = Math.random();
+  if (r < 0.22) pickups.spawn('hull', pos.clone());
+  else if (r < 0.44) pickups.spawn('shield', pos.clone());
+}
+
+function onCollect(type, pickup) {
+  if (type === 'hull') {
+    ship.hull = Math.min(ship.maxHull, ship.hull + 30);
+  } else if (type === 'shield') {
+    ship.shield = ship.maxShield;
+  } else if (type === 'artifact') {
+    score += 500;
+    hud.setScore(score);
+  }
+  if (pickup.secret) {
+    secretsFound++;
+    hud.setSecrets(secretsFound, secretsTotal);
+    hud.toast('★ SECRET FOUND ★  ' + PICKUP_TYPES[type].label);
+  } else {
+    hud.toast(PICKUP_TYPES[type].label);
   }
 }
 
@@ -104,12 +160,15 @@ function resolveHits() {
     if (p.owner === 'player') {
       for (const e of enemies) {
         if (!e.alive) continue;
-        if (ppos.distanceTo(e.pos) < e.radius + p.radius) {
+        // Swept test: distance from the enemy to the bolt's travel segment.
+        const hitR = e.radius + p.radius;
+        if (distSqPointSegment(e.pos, p.prev, ppos) < hitR * hitR) {
           const dead = e.damage(p.damage);
           spawnExplosion(ppos, 0xffd27a, 0.5);
           projectiles.consume(p);
           if (dead) {
             spawnExplosion(e.pos, 0xff7a3c, 1.4);
+            maybeDropPickup(e.pos);
             e.destroy(scene);
             score += 100;
             hud.setScore(score);
@@ -119,7 +178,8 @@ function resolveHits() {
       }
     } else if (p.owner === 'enemy') {
       // Only enemy bolts can hurt the player — player shots never self-damage.
-      if (ship.alive && ppos.distanceTo(ship.position) < ship.radius + p.radius) {
+      const hitR = ship.radius + p.radius;
+      if (ship.alive && distSqPointSegment(ship.position, p.prev, ppos) < hitR * hitR) {
         ship.takeDamage(p.damage);
         hud.damageFlash();
         spawnExplosion(ppos, 0xff5a3c, 0.4);
@@ -146,6 +206,7 @@ function startGame() {
   explosions.forEach((e) => { scene.remove(e.mesh); scene.remove(e.light); });
   explosions = [];
   spawnEnemies();
+  spawnPickups();
   hud.setScore(0);
   hud.setEnemies(enemies.length);
   hud.show();
@@ -193,6 +254,7 @@ function animate() {
     for (const e of enemies) e.update(dt, ship, level, fire);
     projectiles.update(dt);
     resolveHits();
+    pickups.update(dt, ship, onCollect);
     updateExplosions(dt);
     hud.setShip(ship);
 
