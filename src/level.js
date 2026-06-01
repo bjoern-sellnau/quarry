@@ -316,6 +316,30 @@ export class Level {
     return this.cellAt(pos) >= 0;
   }
 
+  // Reflect a projectile that just left the level off the wall it crossed.
+  // Mirrors position back inside and flips the velocity on the exceeded axes.
+  // Returns false if we can't determine the originating cell (then cull it).
+  reflectPoint(p) {
+    const c = this.cellAt(p.prev, p.cell ?? -1);
+    if (c < 0) return false;
+    const cell = this.cells[c];
+    const pos = p.mesh.position;
+    const vel = p.vel;
+    let did = false;
+    for (const ax of ['x', 'y', 'z']) {
+      if (pos[ax] > cell.max[ax]) {
+        pos[ax] = cell.max[ax] - (pos[ax] - cell.max[ax]);
+        vel[ax] = -vel[ax];
+        did = true;
+      } else if (pos[ax] < cell.min[ax]) {
+        pos[ax] = cell.min[ax] + (cell.min[ax] - pos[ax]);
+        vel[ax] = -vel[ax];
+        did = true;
+      }
+    }
+    return did;
+  }
+
   cellByKind(kind) {
     return this.cells.find((c) => c.kind === kind);
   }

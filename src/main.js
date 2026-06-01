@@ -7,6 +7,8 @@ import { Enemy } from './enemies.js';
 import { Pickups, PICKUP_TYPES } from './pickups.js';
 import { Prisoners } from './prisoners.js';
 import { Mission } from './mission.js';
+import { Particles } from './particles.js';
+import { AudioEngine } from './audio.js';
 import { Hud } from './hud.js';
 
 const canvas = document.getElementById('game');
@@ -39,7 +41,15 @@ const projectiles = new Projectiles(scene, level);
 const pickups = new Pickups(scene);
 const prisoners = new Prisoners(scene);
 const mission = new Mission(scene, level);
+const particles = new Particles(scene);
+const audio = new AudioEngine();
 const hud = new Hud();
+
+// Wall impacts: spark particles (colour by who fired).
+projectiles._onWallHit = (p) => {
+  const col = p.owner === 'player' ? (p.kind === 'rocket' ? 0xffae42 : 0x6cff7a) : 0xff5a3c;
+  particles.burst(p.mesh.position, col, 8, 9, 0.35);
+};
 
 let enemies = [];
 let explosions = [];
@@ -64,15 +74,16 @@ const SPAWN_CELLS = [2, 4, 4, 6, 8, 14, 18, 18];
 function spawnEnemies() {
   enemies.forEach((e) => e.destroy(scene));
   enemies = [];
-  for (const ci of SPAWN_CELLS) {
+  SPAWN_CELLS.forEach((ci, n) => {
     const cell = level.cells[ci];
     const pos = new THREE.Vector3(
       THREE.MathUtils.lerp(cell.min.x + 3, cell.max.x - 3, Math.random()),
       THREE.MathUtils.lerp(cell.min.y + 3, cell.max.y - 3, Math.random()),
       THREE.MathUtils.lerp(cell.min.z + 3, cell.max.z - 3, Math.random()),
     );
-    enemies.push(new Enemy(scene, pos));
-  }
+    // Every third bot is armored: heavier, can't be rammed safely.
+    enemies.push(new Enemy(scene, pos, n % 3 === 2));
+  });
 }
 
 // ---------- Pickups & secrets ----------
@@ -123,6 +134,7 @@ function maybeDropPickup(pos) {
 }
 
 function onCollect(type, pickup) {
+  audio.pickup();
   if (type === 'hull') {
     ship.hull = Math.min(ship.maxHull, ship.hull + 30);
     hud.toast(PICKUP_TYPES[type].label);
@@ -197,11 +209,16 @@ function updateExplosions(dt) {
 // ---------- Combat resolution ----------
 function fire(origin, dir, opts) {
   projectiles.spawn(origin, dir, opts);
+  if (opts.owner === 'player') {
+    if (opts.kind === 'rocket') audio.rocket(); else audio.shoot();
+  }
 }
 
 function onReactorDestroyed() {
   hud.toast('☢ REACTOR DESTROYED — ESCAPE NOW! ☢');
   spawnExplosion(mission.reactor.pos, 0xffff66, 4);
+  particles.burst(mission.reactor.pos, 0xffff66, 60, 22, 0.9);
+  audio.bigExplosion();
 }
 
 function resolveHits() {
@@ -233,6 +250,8 @@ function resolveHits() {
         if (distSqPointSegment(e.pos, p.prev, ppos) < hitR * hitR) {
           const dead = e.damage(p.damage);
           spawnExplosion(ppos, 0xffd27a, 0.5);
+          particles.burst(ppos, 0xffd27a, 12, 12, 0.4);
+          audio.enemyHit();
           if (p.kind === 'rocket') {
             spawnExplosion(ppos, 0xffae42, 2.2);
             applySplash(ppos, p.splash, p.damage * 0.6, 'player');
@@ -241,6 +260,8 @@ function resolveHits() {
           consumed = true;
           if (dead) {
             spawnExplosion(e.pos, 0xff7a3c, 1.4);
+            particles.burst(e.pos, 0xff7a3c, 24, 16, 0.6);
+            audio.enemyKill();
             maybeDropPickup(e.pos);
             score += 100;
             hud.setScore(score);
@@ -254,7 +275,9 @@ function resolveHits() {
       if (ship.alive && distSqPointSegment(ship.position, p.prev, ppos) < hitR * hitR) {
         ship.takeDamage(p.damage);
         hud.damageFlash();
+        audio.playerHit();
         spawnExplosion(ppos, 0xff5a3c, 0.4);
+        particles.burst(ppos, 0xff5a3c, 8, 8, 0.35);
         projectiles.consume(p);
       }
     }
@@ -264,16 +287,59 @@ function resolveHits() {
   hud.setEnemies(enemies.length);
 }
 
+// Ramming: fly into a bot. Light bots are crushed (small hull cost); armored
+// bots shrug it off and hurt you, with a knockback so you don't stick to them.
+function resolveRamming() {
+  if (!ship.alive) return;
+  for (const e of enemies) {
+    if (!e.alive) continue;
+    const reach = ship.radius + e.radius;
+    if (ship.position.distanceTo(e.pos) >= reach) continue;
+    if (!e.armored) {
+      e.alive = false;
+      spawnExplosion(e.pos, 0xff7a3c, 1.4);
+      particles.burst(e.pos, 0xff7a3c, 24, 16, 0.6);
+      audio.enemyKill();
+      maybeDropPickup(e.pos);
+      ship.takeDamage(8);
+      hud.damageFlash();
+      score += 100; hud.setScore(score);
+    } else {
+      e.damage(18);
+      ship.takeDamage(18);
+      hud.damageFlash();
+      audio.playerHit();
+      particles.burst(ship.position, 0x5ad0ff, 10, 10, 0.4);
+      const away = ship.position.clone().sub(e.pos).normalize();
+      ship.velocity.addScaledVector(away, 22);
+      e.vel.addScaledVector(away, -10);
+    }
+  }
+  enemies = enemies.filter((e) => e.alive);
+  hud.setEnemies(enemies.length);
+}
+
+// Music intensity from the combat situation.
+function combatIntensity() {
+  if (mission.meltdown) return 1;
+  let aware = 0;
+  for (const e of enemies) if (e.alive && e.aware) aware++;
+  return Math.min(1, aware / 3);
+}
+
 // ---------- Game state ----------
 const overlay = document.getElementById('overlay');
 const screenStart = document.getElementById('screen-start');
 const screenEnd = document.getElementById('screen-end');
 
 function startGame() {
+  audio.init();          // user gesture — unlock + start music
+  audio.setEnabled(true);
   score = 0;
   ship.reset();
   shipCellState.cell = 0;
   projectiles.clear();
+  particles.clear();
   explosions.forEach((e) => { scene.remove(e.mesh); });
   explosions = [];
 
@@ -307,6 +373,9 @@ function endGame(win, reason) {
   const msg = document.getElementById('end-msg');
   title.textContent = win ? 'ESCAPED' : 'MISSION FAILED';
   title.className = win ? 'win' : 'lose';
+  audio.setIntensity(0);
+  audio.setEnabled(false);
+  if (!win) audio.bigExplosion();
   msg.textContent = reason;
   document.getElementById('final-score').textContent = score;
   screenStart.classList.add('hidden');
@@ -325,7 +394,7 @@ document.getElementById('btn-restart').addEventListener('click', () => {
 window.addEventListener('keydown', (e) => {
   if (state === 'playing' && e.code === 'KeyF') {
     const msg = mission.tryOpenDoors(ship);
-    if (msg) hud.toast(msg);
+    if (msg) { hud.toast(msg); if (msg.includes('OPENED')) audio.door(); }
   }
 });
 
@@ -344,6 +413,7 @@ function animate() {
     for (const e of enemies) e.update(dt, ship, level, fire);
     projectiles.update(dt);
     resolveHits();
+    resolveRamming();
     pickups.update(dt, ship, onCollect);
     prisoners.update(dt, ship, () => {
       hostagesRescued++;
@@ -356,6 +426,8 @@ function animate() {
       hud.toast(kind.toUpperCase() + ' KEYCARD');
     });
     updateExplosions(dt);
+    particles.update(dt);
+    audio.setIntensity(combatIntensity());
     hud.setShip(ship);
     hud.setWeapon(ship);
     hud.setMeltdown(mission.meltdown, mission.timeLeft);
@@ -373,6 +445,7 @@ function animate() {
     }
   } else {
     updateExplosions(dt);
+    particles.update(dt);
   }
 
   renderer.render(scene, camera);

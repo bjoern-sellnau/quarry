@@ -2,38 +2,48 @@
 // shared/adjacent cell, then close in and fire leading shots.
 import * as THREE from 'three';
 
-function makeRobotMesh() {
+function makeRobotMesh(armored) {
   const g = new THREE.Group();
+  const size = armored ? 1.5 : 1.1;
   const body = new THREE.Mesh(
-    new THREE.IcosahedronGeometry(1.1, 0),
-    new THREE.MeshStandardMaterial({ color: 0x8a3b2f, metalness: 0.6, roughness: 0.4, emissive: 0x2a0a05 }),
+    armored ? new THREE.DodecahedronGeometry(size, 0) : new THREE.IcosahedronGeometry(size, 0),
+    new THREE.MeshStandardMaterial({
+      color: armored ? 0x44505c : 0x8a3b2f,
+      metalness: armored ? 0.85 : 0.6,
+      roughness: 0.4,
+      emissive: armored ? 0x10202c : 0x6a1c10,
+      emissiveIntensity: 0.8,
+    }),
   );
   g.add(body);
   // Glowing "eye" (unlit, no PointLight — enemies spawn/die constantly and a
   // changing light count would recompile every shader).
   const eye = new THREE.Mesh(
     new THREE.SphereGeometry(0.32, 10, 10),
-    new THREE.MeshBasicMaterial({ color: 0xff7a3c }),
+    new THREE.MeshBasicMaterial({ color: armored ? 0x5ad0ff : 0xff7a3c }),
   );
-  eye.position.set(0, 0, 1.0);
+  eye.position.set(0, 0, size * 0.9);
   g.add(eye);
-  // Make the body glow a bit so bots stay visible without a per-bot light.
-  body.material.emissive.setHex(0x6a1c10);
-  body.material.emissiveIntensity = 0.8;
-  return g;
+  return { group: g, body };
 }
 
 export class Enemy {
-  constructor(scene, pos) {
-    this.mesh = makeRobotMesh();
+  constructor(scene, pos, armored = false) {
+    const built = makeRobotMesh(armored);
+    this.mesh = built.group;
+    this.body = built.body;
+    this.baseEmissive = this.body.material.emissive.getHex();
     this.mesh.position.copy(pos);
     scene.add(this.mesh);
 
+    this.armored = armored;
     this.pos = this.mesh.position;
     this.vel = new THREE.Vector3();
-    this.hp = 50;
-    this.radius = 1.2;
+    this.hp = armored ? 110 : 50;
+    this.radius = armored ? 1.6 : 1.2;
     this.alive = true;
+    this.aware = false;
+    this.flashTimer = 0;
 
     this.fireTimer = 1 + Math.random() * 1.5;
     this.speed = 9 + Math.random() * 3;
@@ -46,6 +56,8 @@ export class Enemy {
 
   damage(amount) {
     this.hp -= amount;
+    this.flashTimer = 0.12; // brief white flash for clear hit feedback
+    this.body.material.emissive.setHex(0xffffff);
     if (this.hp <= 0) this.alive = false;
     return !this.alive;
   }
@@ -56,6 +68,13 @@ export class Enemy {
     const sameAreaCells = this._reachable(level);
     const playerCell = level.cellAt(ship.position);
     const canSee = ship.alive && dist < this.detectRange && sameAreaCells.has(playerCell);
+    this.aware = canSee;
+
+    // Decay the hit flash back to the base glow.
+    if (this.flashTimer > 0) {
+      this.flashTimer -= dt;
+      if (this.flashTimer <= 0) this.body.material.emissive.setHex(this.baseEmissive);
+    }
 
     if (canSee) {
       // Approach but keep some distance.

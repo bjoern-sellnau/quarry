@@ -62,6 +62,9 @@ export class Projectiles {
       damage: opts.damage,
       splash: opts.splash || 0,
       radius: isRocket ? 0.7 : (isPlayer ? 1.0 : 0.6),
+      // Player lasers ricochet off walls a couple of times; rockets explode.
+      bounces: (kind === 'laser' && isPlayer) ? 2 : 0,
+      cell: -1,
     });
   }
 
@@ -71,11 +74,23 @@ export class Projectiles {
       p.prev.copy(p.mesh.position);
       p.mesh.position.addScaledVector(p.vel, dt);
       p.ttl -= dt;
-      if (p.ttl <= 0 || !this.level.isInside(p.mesh.position)) {
-        // Rockets that hit a wall still splash (handled in main via wallHit flag).
-        if (p.kind === 'rocket' && p.splash > 0 && this._onRocketExpire) {
-          this._onRocketExpire(p);
-        }
+      if (p.ttl <= 0) { this._remove(i); continue; }
+
+      const idx = this.level.cellAt(p.mesh.position, p.cell);
+      if (idx >= 0) { p.cell = idx; continue; }
+
+      // Outside every cell => hit a wall.
+      if (this._onWallHit) this._onWallHit(p);
+      if (p.kind === 'rocket') {
+        if (p.splash > 0 && this._onRocketExpire) this._onRocketExpire(p);
+        this._remove(i);
+        continue;
+      }
+      if (p.bounces > 0 && this.level.reflectPoint(p)) {
+        p.bounces--;
+        // Re-aim the bolt mesh along its new velocity.
+        p.mesh.quaternion.setFromUnitVectors(Z, p.vel.clone().normalize());
+      } else {
         this._remove(i);
       }
     }
