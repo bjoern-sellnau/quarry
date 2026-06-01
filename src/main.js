@@ -10,8 +10,10 @@ import { Mission } from './mission.js';
 import { Hud } from './hud.js';
 
 const canvas = document.getElementById('game');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+// Cap pixel ratio: rendering at 2x DPR is 4x the fragments and a common cause
+// of stutter on high-DPI displays. 1.5 keeps it sharp but much cheaper.
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
 
 const scene = new THREE.Scene();
@@ -20,22 +22,17 @@ scene.fog = new THREE.FogExp2(0x0e151d, 0.005);
 
 const camera = new THREE.PerspectiveCamera(78, window.innerWidth / window.innerHeight, 0.05, 1000);
 
-// Lighting: moderate ambient + a headlamp that follows the ship.
-scene.add(new THREE.AmbientLight(0x90a0b0, 1.5));
-scene.add(new THREE.HemisphereLight(0xbfe0f0, 0x2a3440, 1.0));
-const headlamp = new THREE.PointLight(0xdaf0ff, 2.6, 130, 1.1);
+// Lighting: a fixed rig only. We deliberately avoid adding/removing lights at
+// runtime — changing the scene's light count forces Three.js to recompile
+// every material's shader, which is the main cause of frame stutter.
+scene.add(new THREE.AmbientLight(0xaab8c4, 2.6));
+scene.add(new THREE.HemisphereLight(0xcfe6f2, 0x2a3440, 1.6));
+const headlamp = new THREE.PointLight(0xdaf0ff, 3.0, 160, 1.0);
 scene.add(headlamp);
 
 const input = new Input(canvas);
 const level = new Level();
 level.build(scene);
-
-// A fill light in every chamber so rooms read clearly.
-for (const cell of level.cells) {
-  const l = new THREE.PointLight(0xafd8e6, 1.9, 130);
-  l.position.copy(cell.center);
-  scene.add(l);
-}
 
 const ship = new Ship(camera, input);
 const projectiles = new Projectiles(scene, level);
@@ -156,15 +153,13 @@ function onCollect(type, pickup) {
 
 // ---------- Explosions & splash ----------
 function spawnExplosion(pos, color = 0xff7a3c, scale = 1) {
-  const geo = new THREE.SphereGeometry(0.6 * scale, 12, 12);
+  const geo = new THREE.SphereGeometry(0.6 * scale, 10, 10);
+  // Unlit emissive sphere — no PointLight, so no shader recompiles.
   const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1 });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.position.copy(pos);
   scene.add(mesh);
-  const light = new THREE.PointLight(color, 8, 30);
-  light.position.copy(pos);
-  scene.add(light);
-  explosions.push({ mesh, light, t: 0, life: 0.5, scale });
+  explosions.push({ mesh, t: 0, life: 0.5, scale });
 }
 
 // Rocket splash: damage every enemy (and the reactor) within radius.
@@ -192,10 +187,8 @@ function updateExplosions(dt) {
     const k = e.t / e.life;
     e.mesh.scale.setScalar(1 + k * 6 * e.scale);
     e.mesh.material.opacity = 1 - k;
-    e.light.intensity = 8 * (1 - k);
     if (e.t >= e.life) {
       scene.remove(e.mesh);
-      scene.remove(e.light);
       explosions.splice(i, 1);
     }
   }
@@ -281,7 +274,7 @@ function startGame() {
   ship.reset();
   shipCellState.cell = 0;
   projectiles.clear();
-  explosions.forEach((e) => { scene.remove(e.mesh); scene.remove(e.light); });
+  explosions.forEach((e) => { scene.remove(e.mesh); });
   explosions = [];
 
   // Reset mission state by rebuilding doors/keycards/reactor.

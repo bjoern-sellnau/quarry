@@ -9,14 +9,17 @@ function makeRobotMesh() {
     new THREE.MeshStandardMaterial({ color: 0x8a3b2f, metalness: 0.6, roughness: 0.4, emissive: 0x2a0a05 }),
   );
   g.add(body);
-  // Glowing "eye".
+  // Glowing "eye" (unlit, no PointLight — enemies spawn/die constantly and a
+  // changing light count would recompile every shader).
   const eye = new THREE.Mesh(
-    new THREE.SphereGeometry(0.32, 12, 12),
+    new THREE.SphereGeometry(0.32, 10, 10),
     new THREE.MeshBasicMaterial({ color: 0xff7a3c }),
   );
   eye.position.set(0, 0, 1.0);
   g.add(eye);
-  g.add(new THREE.PointLight(0xff5a3c, 2.5, 14));
+  // Make the body glow a bit so bots stay visible without a per-bot light.
+  body.material.emissive.setHex(0x6a1c10);
+  body.material.emissiveIntensity = 0.8;
   return g;
 }
 

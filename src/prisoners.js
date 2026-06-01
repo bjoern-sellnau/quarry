@@ -6,17 +6,16 @@ function makeMesh() {
   const g = new THREE.Group();
   const body = new THREE.Mesh(
     new THREE.CapsuleGeometry(0.5, 1.0, 4, 8),
-    new THREE.MeshStandardMaterial({ color: 0x9fe6ff, emissive: 0x1a3a44, metalness: 0.1, roughness: 0.6 }),
+    new THREE.MeshStandardMaterial({ color: 0x9fe6ff, emissive: 0x36c0e0, emissiveIntensity: 0.7, metalness: 0.1, roughness: 0.6 }),
   );
   g.add(body);
   // SOS halo.
   const ring = new THREE.Mesh(
     new THREE.TorusGeometry(1.0, 0.06, 8, 24),
-    new THREE.MeshBasicMaterial({ color: 0x36e0ff, transparent: true, opacity: 0.7 }),
+    new THREE.MeshBasicMaterial({ color: 0x36e0ff, transparent: true, opacity: 0.8 }),
   );
   ring.rotation.x = Math.PI / 2;
   g.add(ring);
-  g.add(new THREE.PointLight(0x36e0ff, 2.0, 16));
   return { group: g, ring };
 }
 

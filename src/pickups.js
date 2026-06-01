@@ -31,7 +31,8 @@ function makeMesh(type) {
     new THREE.MeshBasicMaterial({ color: cfg.color, wireframe: true, transparent: true, opacity: 0.4 }),
   );
   g.add(shell);
-  g.add(new THREE.PointLight(cfg.light, 2.2, 18));
+  // No PointLight — the emissive core reads fine and avoids shader recompiles
+  // when pickups spawn/are collected.
   return { group: g, core, shell };
 }
 

@@ -39,17 +39,16 @@ export class Projectiles {
     const isPlayer = owner === 'player';
     const isRocket = kind === 'rocket';
 
-    let geo, mat, lightColor;
-    if (isRocket) { geo = ROCKET_GEO; mat = MATS.rocket; lightColor = 0xffae42; }
-    else if (isPlayer) { geo = LASER_GEO; mat = MATS.playerLaser; lightColor = 0x6cff7a; }
-    else { geo = ENEMY_GEO; mat = MATS.enemyLaser; lightColor = 0xff5a3c; }
+    let geo, mat;
+    if (isRocket) { geo = ROCKET_GEO; mat = MATS.rocket; }
+    else if (isPlayer) { geo = LASER_GEO; mat = MATS.playerLaser; }
+    else { geo = ENEMY_GEO; mat = MATS.enemyLaser; }
 
+    // Bolts use unlit emissive (MeshBasicMaterial) and carry no PointLight, so
+    // spawning/despawning them never changes the scene light count.
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.copy(origin);
     mesh.quaternion.setFromUnitVectors(Z, dir.clone().normalize());
-
-    const light = new THREE.PointLight(lightColor, isRocket ? 4 : 2.5, isRocket ? 14 : 8);
-    mesh.add(light);
     this.scene.add(mesh);
 
     const speed = opts.speed || (isRocket ? 55 : (isPlayer ? 120 : 55));

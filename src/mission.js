@@ -91,10 +91,9 @@ export class Mission {
     const g = new THREE.Group();
     const card = new THREE.Mesh(
       new THREE.BoxGeometry(1.2, 0.8, 0.12),
-      new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.6, metalness: 0.6, roughness: 0.3 }),
+      new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.9, metalness: 0.6, roughness: 0.3 }),
     );
     g.add(card);
-    g.add(new THREE.PointLight(col, 2.2, 16));
     g.position.copy(pos);
     this.scene.add(g);
     this.keycards.push({ kind, mesh: g, phase: Math.random() * 6.28 });
@@ -105,7 +104,7 @@ export class Mission {
     group.position.copy(pos);
     const core = new THREE.Mesh(
       new THREE.IcosahedronGeometry(3.5, 1),
-      new THREE.MeshStandardMaterial({ color: 0xff6622, emissive: 0xff3300, emissiveIntensity: 1.2, metalness: 0.3, roughness: 0.5 }),
+      new THREE.MeshStandardMaterial({ color: 0xff6622, emissive: 0xff3300, emissiveIntensity: 1.4, metalness: 0.3, roughness: 0.5 }),
     );
     group.add(core);
     const cage = new THREE.Mesh(
@@ -113,7 +112,6 @@ export class Mission {
       new THREE.MeshBasicMaterial({ color: 0xffaa44, wireframe: true, transparent: true, opacity: 0.4 }),
     );
     group.add(cage);
-    group.add(new THREE.PointLight(0xff5522, 4, 80));
     return { group, core, cage, pos: pos.clone(), hp: 250, radius: 5 };
   }
 

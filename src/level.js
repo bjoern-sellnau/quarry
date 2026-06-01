@@ -134,33 +134,62 @@ export class Level {
   }
 
   // ---------- Geometry ----------
+  // Everything is merged into a single wall mesh (vertex-coloured) plus a
+  // single line mesh for the panel outlines. Two draw calls for the whole
+  // mine instead of hundreds — far cheaper to render.
   build(scene) {
-    const group = new THREE.Group();
+    const positions = [];
+    const normals = [];
+    const colors = [];
+    const linePos = [];
+
+    const ab = new THREE.Vector3();
+    const ad = new THREE.Vector3();
+    const nrm = new THREE.Vector3();
 
     for (const cell of this.cells) {
-      const mat = new THREE.MeshStandardMaterial({
-        color: cell.color,
-        roughness: 0.7,
-        metalness: 0.2,
-        emissive: new THREE.Color(cell.color).multiplyScalar(0.15),
-        side: THREE.DoubleSide,
-      });
-      const lineMat = new THREE.LineBasicMaterial({ color: 0x7fd4e6, transparent: true, opacity: 0.7 });
-
+      const col = new THREE.Color(cell.color);
       for (const key of Object.keys(FACES)) {
         const quads = this._faceQuads(cell, key);
         for (const q of quads) {
-          const geo = this._quadGeometry(q);
-          const mesh = new THREE.Mesh(geo, mat);
-          group.add(mesh);
-          const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), lineMat);
-          group.add(edges);
+          const [a, b, c, d] = q.pts;
+          ab.subVectors(b, a);
+          ad.subVectors(d, a);
+          nrm.crossVectors(ab, ad).normalize();
+          for (const v of [a, b, c, a, c, d]) {
+            positions.push(v.x, v.y, v.z);
+            normals.push(nrm.x, nrm.y, nrm.z);
+            colors.push(col.r, col.g, col.b);
+          }
+          // Panel outline (4 edges).
+          for (const [p, q2] of [[a, b], [b, c], [c, d], [d, a]]) {
+            linePos.push(p.x, p.y, p.z, q2.x, q2.y, q2.z);
+          }
         }
       }
     }
 
-    scene.add(group);
-    this.group = group;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    const mat = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 0.85,
+      metalness: 0.15,
+      emissive: 0x141d24,
+      emissiveIntensity: 1.0,
+      side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    scene.add(mesh);
+
+    const lgeo = new THREE.BufferGeometry();
+    lgeo.setAttribute('position', new THREE.Float32BufferAttribute(linePos, 3));
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x7fd4e6, transparent: true, opacity: 0.45 });
+    scene.add(new THREE.LineSegments(lgeo, lineMat));
+
+    this.group = mesh;
   }
 
   _faceQuads(cell, key) {
