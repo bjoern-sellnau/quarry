@@ -131,7 +131,7 @@ export class Ship {
       const dir = this.forward();
       // Spawn the bolt ahead of the ship so it doesn't flash over the camera
       // (and can never collide with the player itself).
-      const muzzle = this.position.clone().addScaledVector(dir, this.radius + 2.5);
+      const muzzle = this.position.clone().addScaledVector(dir, this.radius + 1.0);
       fireCallback(muzzle, dir, this.quaternion.clone());
     }
 

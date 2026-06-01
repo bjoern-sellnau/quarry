@@ -50,8 +50,8 @@ export class Projectiles {
       vel: dir.clone().normalize().multiplyScalar(speed),
       ttl: 3,
       owner,
-      damage: isPlayer ? 34 : 12,
-      radius: isPlayer ? 0.3 : 0.5,
+      damage: isPlayer ? 55 : 12,
+      radius: isPlayer ? 1.0 : 0.5,
     });
   }
 
