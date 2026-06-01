@@ -34,7 +34,20 @@ export class Ship {
     this.alive = true;
 
     this.fireCooldown = 0;
-    this.fireRate = 0.14;    // seconds between shots
+
+    // ---- Weapons ----
+    // Laser level 1-3 (more bolts / more damage). Rockets are a limited ammo
+    // secondary. weapon: 1 = laser, 2 = rockets.
+    this.weapon = 1;
+    this.laserLevel = 1;
+    this.maxLaserLevel = 3;
+    this.rockets = 3;
+    this.laserRate = 0.14;
+    this.rocketRate = 0.7;
+
+    // Keycards collected this level.
+    this.keys = { red: false, blue: false, yellow: false };
+    this.hostagesAboard = 0;
   }
 
   reset() {
@@ -45,6 +58,11 @@ export class Ship {
     this.shield = this.maxShield;
     this.alive = true;
     this.fireCooldown = 0;
+    this.weapon = 1;
+    this.laserLevel = 1;
+    this.rockets = 3;
+    this.keys = { red: false, blue: false, yellow: false };
+    this.hostagesAboard = 0;
   }
 
   forward() {
@@ -71,6 +89,14 @@ export class Ship {
         this.alive = false;
       }
     }
+  }
+
+  // Right-hand basis vectors for muzzle offsets (multi-bolt lasers).
+  right() {
+    return new THREE.Vector3(1, 0, 0).applyQuaternion(this.quaternion);
+  }
+  up() {
+    return new THREE.Vector3(0, 1, 0).applyQuaternion(this.quaternion);
   }
 
   update(dt, fireCallback) {
@@ -124,15 +150,34 @@ export class Ship {
       this.shield = Math.min(this.maxShield, this.shield + this.shieldRegen * dt);
     }
 
+    // ---- Weapon select ----
+    if (input.isDown('Digit1')) this.weapon = 1;
+    if (input.isDown('Digit2') && this.rockets > 0) this.weapon = 2;
+
     // ---- Firing ----
     this.fireCooldown -= dt;
     if (input.firing && this.fireCooldown <= 0 && this.alive) {
-      this.fireCooldown = this.fireRate;
       const dir = this.forward();
-      // Spawn the bolt ahead of the ship so it doesn't flash over the camera
-      // (and can never collide with the player itself).
-      const muzzle = this.position.clone().addScaledVector(dir, this.radius + 1.0);
-      fireCallback(muzzle, dir, this.quaternion.clone());
+      const base = this.position.clone().addScaledVector(dir, this.radius + 1.0);
+
+      if (this.weapon === 2 && this.rockets > 0) {
+        this.fireCooldown = this.rocketRate;
+        this.rockets--;
+        fireCallback(base, dir, { kind: 'rocket', owner: 'player', damage: 120, splash: 6, speed: 60 });
+        if (this.rockets === 0) this.weapon = 1;
+      } else {
+        this.fireCooldown = this.laserRate;
+        const dmg = 34 + (this.laserLevel - 1) * 16; // L1 34, L2 50, L3 66
+        // Level decides how many parallel bolts fire.
+        const r = this.right();
+        const offsets = this.laserLevel === 1 ? [0]
+          : this.laserLevel === 2 ? [-0.6, 0.6]
+          : [-0.8, 0, 0.8];
+        for (const o of offsets) {
+          const muzzle = base.clone().addScaledVector(r, o);
+          fireCallback(muzzle, dir, { kind: 'laser', owner: 'player', damage: dmg });
+        }
+      }
     }
 
     // ---- Sync camera ----

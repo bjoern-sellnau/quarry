@@ -86,6 +86,35 @@ html, body {
 .bar-fill.hull { background: linear-gradient(90deg, var(--warn), var(--hull)); box-shadow: 0 0 10px var(--hull); }
 .bar-fill.shield { background: linear-gradient(90deg, var(--accent-dim), var(--shield)); box-shadow: 0 0 10px var(--shield); }
 
+#hud-weapon {
+  position: absolute; right: 28px; bottom: 26px;
+  display: flex; flex-direction: column; align-items: flex-end; gap: 8px;
+}
+#weapon {
+  font-size: 18px; letter-spacing: 2px; color: var(--hull);
+  text-shadow: 0 0 8px rgba(255,174,66,0.5);
+}
+#keys { display: flex; gap: 6px; }
+.key {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 3px; font-size: 12px; font-weight: bold;
+  border: 1px solid rgba(255,255,255,0.25); color: rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.05);
+}
+.key.red.on { background: #ff4444; color: #fff; box-shadow: 0 0 10px #ff4444; border-color: #ff8888; }
+.key.blue.on { background: #4477ff; color: #fff; box-shadow: 0 0 10px #4477ff; border-color: #88aaff; }
+.key.yellow.on { background: #ffd23f; color: #222; box-shadow: 0 0 10px #ffd23f; border-color: #ffe888; }
+
+#meltdown {
+  position: absolute; top: 84px; left: 50%; transform: translateX(-50%);
+  padding: 8px 26px; font-size: 22px; letter-spacing: 4px; font-weight: bold;
+  color: #fff; background: rgba(200,40,20,0.85);
+  border: 1px solid #ff7a4d; border-radius: 3px;
+  box-shadow: 0 0 24px rgba(255,90,40,0.6);
+}
+#meltdown.critical { animation: pulse 0.4s steps(2) infinite; }
+@keyframes pulse { 0% { background: rgba(200,40,20,0.85); } 100% { background: rgba(255,80,40,0.95); } }
+
 #damage-flash {
   position: absolute; inset: 0;
   background: radial-gradient(circle, transparent 40%, rgba(255,40,30,0.55) 100%);

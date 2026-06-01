@@ -11,7 +11,7 @@ export class Input {
 
     window.addEventListener('keydown', (e) => {
       // Prevent the page from scrolling on Space etc. while playing.
-      if (['Space', 'ControlLeft', 'ControlRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(e.code)) {
+      if (['Space', 'ControlLeft', 'ControlRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'Digit1', 'Digit2'].includes(e.code)) {
         e.preventDefault();
       }
       this.keys.add(e.code);

@@ -1,6 +1,7 @@
 // The mine: axis-aligned chambers + tunnels. Doorways (openings) between
 // touching cells are derived automatically and used for both rendering
-// (walls with holes) and collision (pass-through).
+// (walls with holes) and collision (pass-through). Some openings carry a
+// `door` (keycard / secret / exit) that blocks passage until opened.
 import * as THREE from 'three';
 
 const EPS = 0.01;
@@ -28,11 +29,37 @@ const CELLS = [
   { min: [58, 16, -68], max: [70, 40, -52], color: 0x4e636f },    // 7 vertical shaft (+y from C)
   { min: [50, 40, -76], max: [86, 72, -44], color: 0x687784 },    // 8 high chamber E
 
-  // --- Secret areas: reached through small, easy-to-miss doorways. ---
+  // --- Secret areas: reached through shoot-to-open secret doors. ---
   { min: [-30, -3, -60], max: [-18, 3, -54], color: 0x3a4a40 },   // 9 secret crawlway off chamber B (-x)
-  { min: [-52, -10, -67], max: [-30, 10, -47], color: 0x2f4538, secret: true }, // 10 SECRET vault A
+  { min: [-52, -10, -67], max: [-30, 10, -47], color: 0x2f4538, secret: true }, // 10 SECRET vault A (red keycard)
   { min: [75, -3, -6], max: [90, 3, 2], color: 0x3a4a40 },        // 11 secret crawlway off chamber D (+x)
-  { min: [90, -10, -16], max: [110, 10, 12], color: 0x2f4538, secret: true },   // 12 SECRET vault B
+  { min: [90, -10, -16], max: [110, 10, 12], color: 0x2f4538, secret: true },   // 12 SECRET vault B (yellow keycard)
+
+  // --- Prison block (behind yellow door off chamber D, +z). ---
+  { min: [50, -4, 16], max: [70, 4, 40], color: 0x4a5a4e },       // 13 prison corridor
+  { min: [44, -10, 40], max: [76, 10, 64], color: 0x3f5246, kind: 'prison' }, // 14 prison hall
+  { min: [24, -6, 44], max: [44, 6, 60], color: 0x35463b, kind: 'cell' },     // 15 prison cell 1 (blue door)
+  { min: [76, -6, 44], max: [96, 6, 60], color: 0x35463b, kind: 'cell' },     // 16 prison cell 2 (blue door)
+
+  // --- Reactor wing (behind red door off chamber C, +x). ---
+  { min: [84, -6, -66], max: [104, 6, -54], color: 0x5a3a3a },    // 17 reactor approach
+  { min: [104, -16, -78], max: [140, 16, -42], color: 0x6e2e2e, kind: 'reactor' }, // 18 reactor room
+
+  // --- Emergency exit (off start, -x). Exit door opens once reactor blows. ---
+  { min: [-35, -4, -4], max: [-15, 4, 4], color: 0x4e5a4e },      // 19 exit tunnel
+  { min: [-60, -10, -16], max: [-35, 10, 12], color: 0x3a5a48, kind: 'exit' }, // 20 exit chamber
+];
+
+// Doors that gate specific openings between two cells.
+// kind: 'red' | 'blue' | 'yellow' (need keycard) | 'secret' (shoot to open) | 'exit' (opens on reactor destruction)
+const DOORS = [
+  { between: [2, 9], kind: 'secret' },
+  { between: [6, 11], kind: 'secret' },
+  { between: [6, 13], kind: 'yellow' },
+  { between: [14, 15], kind: 'blue' },
+  { between: [14, 16], kind: 'blue' },
+  { between: [4, 17], kind: 'red' },
+  { between: [19, 20], kind: 'exit' },
 ];
 
 export class Level {
@@ -48,9 +75,11 @@ export class Level {
       ),
       color: c.color,
       secret: !!c.secret,
+      kind: c.kind || null,
       openings: { '+x': [], '-x': [], '+y': [], '-y': [], '+z': [], '-z': [] },
     }));
     this._computeOpenings();
+    this._attachDoors();
   }
 
   _computeOpenings() {
@@ -59,7 +88,6 @@ export class Level {
       for (let j = 0; j < cells.length; j++) {
         if (i === j) continue;
         const A = cells[i], B = cells[j];
-        // A's +x face touches B's -x face?
         this._tryFace(A, B, 'x', 'y', 'z');
         this._tryFace(A, B, 'y', 'x', 'z');
         this._tryFace(A, B, 'z', 'x', 'y');
@@ -68,7 +96,7 @@ export class Level {
   }
 
   // If A.max[axis] == B.min[axis] and the two tangent ranges overlap, create
-  // a doorway on A '+axis' and B '-axis'.
+  // a doorway on A '+axis' and B '-axis' (same rect object shared by both).
   _tryFace(A, B, axis, t0, t1) {
     if (Math.abs(A.max[axis] - B.min[axis]) > EPS) return;
     const u0 = Math.max(A.min[t0], B.min[t0]);
@@ -76,9 +104,33 @@ export class Level {
     const v0 = Math.max(A.min[t1], B.min[t1]);
     const v1 = Math.min(A.max[t1], B.max[t1]);
     if (u1 - u0 <= EPS || v1 - v0 <= EPS) return;
-    const rect = { u0, u1, v0, v1 };
+    const rect = { u0, u1, v0, v1, axis, faceVal: A.max[axis], t0, t1, a: A.index, b: B.index };
     A.openings['+' + axis].push(rect);
     B.openings['-' + axis].push(rect);
+  }
+
+  // Match each DOOR to the shared opening rect between its two cells.
+  _attachDoors() {
+    this.doors = [];
+    for (const d of DOORS) {
+      const [a, b] = d.between;
+      const A = this.cells[a];
+      let found = null;
+      for (const key of Object.keys(A.openings)) {
+        for (const rect of A.openings[key]) {
+          if (rect.a === a && rect.b === b || rect.a === b && rect.b === a) { found = rect; break; }
+        }
+        if (found) break;
+      }
+      if (!found) { console.warn('door not matched for cells', a, b); continue; }
+      const center = new THREE.Vector3();
+      center[found.axis] = found.faceVal;
+      center[found.t0] = (found.u0 + found.u1) / 2;
+      center[found.t1] = (found.v0 + found.v1) / 2;
+      const desc = { rect: found, kind: d.kind, open: false, cells: [a, b], center };
+      found.door = desc;
+      this.doors.push(desc);
+    }
   }
 
   // ---------- Geometry ----------
@@ -111,8 +163,6 @@ export class Level {
     this.group = group;
   }
 
-  // Returns a list of {pts:[v3,v3,v3,v3]} quads for a face, with the doorway
-  // hole(s) removed via a frame split.
   _faceQuads(cell, key) {
     const f = FACES[key];
     const axis = f.axis;
@@ -122,13 +172,10 @@ export class Level {
     const v0 = cell.min[t1], v1 = cell.max[t1];
 
     const holes = cell.openings[key];
-    // Build list of rectangles in (u,v) space, then subtract holes via frame split.
     let rects = [{ u0, u1, v0, v1 }];
     for (const h of holes) {
       const next = [];
-      for (const r of rects) {
-        next.push(...this._frameSplit(r, h));
-      }
+      for (const r of rects) next.push(...this._frameSplit(r, h));
       rects = next;
     }
 
@@ -145,21 +192,19 @@ export class Level {
     }));
   }
 
-  // Subtract hole h from rect r, returning up to 4 surrounding strips.
   _frameSplit(r, h) {
     const hu0 = Math.max(r.u0, h.u0), hu1 = Math.min(r.u1, h.u1);
     const hv0 = Math.max(r.v0, h.v0), hv1 = Math.min(r.v1, h.v1);
-    // No overlap → rect unchanged.
     if (hu1 - hu0 <= EPS || hv1 - hv0 <= EPS) return [r];
 
     const out = [];
     const push = (u0, u1, v0, v1) => {
       if (u1 - u0 > EPS && v1 - v0 > EPS) out.push({ u0, u1, v0, v1 });
     };
-    push(r.u0, r.u1, r.v0, hv0);   // bottom
-    push(r.u0, r.u1, hv1, r.v1);   // top
-    push(r.u0, hu0, hv0, hv1);     // left
-    push(hu1, r.u1, hv0, hv1);     // right
+    push(r.u0, r.u1, r.v0, hv0);
+    push(r.u0, r.u1, hv1, r.v1);
+    push(r.u0, hu0, hv0, hv1);
+    push(hu1, r.u1, hv0, hv1);
     return out;
   }
 
@@ -176,8 +221,6 @@ export class Level {
   }
 
   // ---------- Collision ----------
-  // Find the cell that contains a point (boundary inclusive). Prefers the
-  // previously occupied cell to avoid flicker at shared planes.
   cellAt(pos, preferIndex = -1) {
     if (preferIndex >= 0 && this._contains(this.cells[preferIndex], pos)) {
       return preferIndex;
@@ -198,6 +241,7 @@ export class Level {
     const f = FACES[key];
     const [t0, t1] = f.t;
     for (const rect of cell.openings[key]) {
+      if (rect.door && !rect.door.open) continue; // closed door = solid wall
       if (pos[t0] >= rect.u0 + r && pos[t0] <= rect.u1 - r &&
           pos[t1] >= rect.v0 + r && pos[t1] <= rect.v1 - r) {
         return true;
@@ -206,17 +250,12 @@ export class Level {
     return false;
   }
 
-  // Clamp pos (mutated) to stay inside the walkable union. Returns the cell
-  // index the point ends up in. `state` may carry .cell for continuity.
   collide(pos, r, state = {}) {
     let idx = this.cellAt(pos, state.cell ?? -1);
-    if (idx < 0) {
-      // Fell outside everything: snap back to nearest cell's interior.
-      idx = this._nearestCell(pos);
-    }
+    if (idx < 0) idx = this._nearestCell(pos);
     const cell = this.cells[idx];
 
-    const clampAxis = (axis, t0, t1) => {
+    const clampAxis = (axis) => {
       if (pos[axis] < cell.min[axis] + r && !this._inOpening(cell, '-' + axis, pos, r)) {
         pos[axis] = cell.min[axis] + r;
       }
@@ -224,9 +263,9 @@ export class Level {
         pos[axis] = cell.max[axis] - r;
       }
     };
-    clampAxis('x', 'y', 'z');
-    clampAxis('y', 'x', 'z');
-    clampAxis('z', 'x', 'y');
+    clampAxis('x');
+    clampAxis('y');
+    clampAxis('z');
 
     state.cell = idx;
     return idx;
@@ -244,8 +283,11 @@ export class Level {
     return best;
   }
 
-  // Quick test: is a point (e.g. a projectile) inside any walkable cell?
   isInside(pos) {
     return this.cellAt(pos) >= 0;
+  }
+
+  cellByKind(kind) {
+    return this.cells.find((c) => c.kind === kind);
   }
 }

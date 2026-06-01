@@ -71,7 +71,7 @@ export class Enemy {
         const lead = ship.velocity.clone().multiplyScalar(dist / 55);
         const aim = new THREE.Vector3().addVectors(ship.position, lead).sub(this.pos).normalize();
         const muzzle = this.pos.clone().addScaledVector(aim, 1.4);
-        fire(muzzle, aim, 'enemy');
+        fire(muzzle, aim, { kind: 'laser', owner: 'enemy', damage: 12 });
       }
     } else {
       // Wander.

@@ -10,7 +10,7 @@
   <canvas id="game"></canvas>
 
   <!-- Build/version stamp (bumped on every build) -->
-  <div id="build-stamp">quarry | pre-alpha | build 0.20</div>
+  <div id="build-stamp">quarry | pre-alpha | build 0.21</div>
 
   <!-- HUD -->
   <div id="hud" class="hidden">
@@ -30,10 +30,16 @@
         <span id="enemies">0</span>
       </div>
       <div class="hud-stat">
+        <span class="hud-label">HOSTAGES</span>
+        <span id="hostages">0/0</span>
+      </div>
+      <div class="hud-stat">
         <span class="hud-label">SECRETS</span>
         <span id="secrets">0/0</span>
       </div>
     </div>
+
+    <div id="meltdown" class="hidden"></div>
 
     <div id="hud-bottom">
       <div class="bar-group">
@@ -44,6 +50,11 @@
         <span class="hud-label">SHIELD</span>
         <div class="bar"><div id="shield-bar" class="bar-fill shield"></div></div>
       </div>
+    </div>
+
+    <div id="hud-weapon">
+      <span id="weapon">LASER LVL 1</span>
+      <span id="keys"></span>
     </div>
 
     <div id="toast"></div>
@@ -67,14 +78,15 @@
             <div><kbd>Maus</kbd> Pitch / Yaw (Zielen)</div>
           </div>
           <div class="ctrl-col">
-            <h3>COMBAT</h3>
-            <div><kbd>Linke Maus</kbd> Laser feuern</div>
-            <div><kbd>Shift</kbd> Boost</div>
-            <div><kbd>Esc</kbd> Maus freigeben</div>
-            <div class="hint">Zerstöre alle Roboter, ohne abgeschossen zu werden.</div>
+            <h3>COMBAT &amp; MISSION</h3>
+            <div><kbd>Linke Maus</kbd> Feuern</div>
+            <div><kbd>1</kbd><kbd>2</kbd> Laser / Raketen</div>
+            <div><kbd>F</kbd> Tür mit Keycard öffnen</div>
+            <div><kbd>Shift</kbd> Boost &nbsp; <kbd>Esc</kbd> Maus frei</div>
+            <div class="hint">Finde Keycards, rette Geiseln, sprenge den Reaktor (rote Tür) und flieh durch den Notausgang, bevor der Countdown abläuft. Geheimtüren öffnen sich beim Beschuss.</div>
           </div>
         </div>
-        <button id="btn-start" class="btn">FLUG STARTEN</button>
+        <button id="btn-start" class="btn">MISSION STARTEN</button>
         <p class="lock-note">Klick aktiviert die Maussteuerung (Pointer Lock).</p>
       </div>
 

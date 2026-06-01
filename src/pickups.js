@@ -7,6 +7,8 @@ export const PICKUP_TYPES = {
   hull:     { color: 0xffae42, light: 0xffae42, label: 'HULL REPAIR +30' },
   shield:   { color: 0x36e0ff, light: 0x36e0ff, label: 'SHIELD RECHARGED' },
   artifact: { color: 0xffd700, light: 0xffd700, label: 'ARTIFACT  +500' },
+  laser:    { color: 0x6cff7a, light: 0x6cff7a, label: 'LASER UPGRADE' },
+  rockets:  { color: 0xff8844, light: 0xff8844, label: '+3 ROCKETS' },
 };
 
 function makeMesh(type) {
