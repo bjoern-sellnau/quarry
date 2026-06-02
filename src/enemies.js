@@ -1,62 +1,82 @@
-// Floating mining-bot enemies. They drift, detect the player by range +
-// shared/adjacent cell, then close in and fire leading shots.
+// Mining-bot enemies with per-level types. Each level introduces a new type:
+//   drone (L1) · sentry (L2) · kamikaze (L3) · wraith (L4) · hexen (L5).
 import * as THREE from 'three';
 
-function makeRobotMesh(armored) {
+export const ENEMY_TYPES = {
+  drone:    { hp: 45,  speed: 10, radius: 1.2, color: 0x8a3b2f, eye: 0xff7a3c, shape: 'ico',
+              armored: false, behavior: 'standard', dmg: 10, fire: [1.3, 1.1], detect: 60 },
+  sentry:   { hp: 130, speed: 6,  radius: 1.6, color: 0x44505c, eye: 0x5ad0ff, shape: 'dodeca',
+              armored: true,  behavior: 'standard', dmg: 16, fire: [1.0, 0.9], detect: 64 },
+  kamikaze: { hp: 28,  speed: 21, radius: 1.0, color: 0xff3322, eye: 0xffe033, shape: 'tetra',
+              armored: false, behavior: 'charge', dmg: 0, explode: 34, fire: null, detect: 72 },
+  wraith:   { hp: 55,  speed: 16, radius: 1.1, color: 0x6a4aff, eye: 0xb39bff, shape: 'octa',
+              armored: false, behavior: 'strafe', dmg: 12, fire: [0.9, 0.8], detect: 70 },
+  hexen:    { hp: 230, speed: 7,  radius: 2.0, color: 0x222230, eye: 0xff2266, shape: 'ico',
+              armored: true,  behavior: 'standard', dmg: 24, fire: [0.8, 0.7], detect: 80, big: true },
+};
+
+const GEO = {
+  ico: (r) => new THREE.IcosahedronGeometry(r, 0),
+  dodeca: (r) => new THREE.DodecahedronGeometry(r, 0),
+  tetra: (r) => new THREE.TetrahedronGeometry(r * 1.3, 0),
+  octa: (r) => new THREE.OctahedronGeometry(r, 0),
+};
+
+function makeMesh(cfg) {
   const g = new THREE.Group();
-  const size = armored ? 1.5 : 1.1;
   const body = new THREE.Mesh(
-    armored ? new THREE.DodecahedronGeometry(size, 0) : new THREE.IcosahedronGeometry(size, 0),
+    (GEO[cfg.shape] || GEO.ico)(cfg.radius),
     new THREE.MeshStandardMaterial({
-      color: armored ? 0x44505c : 0x8a3b2f,
-      metalness: armored ? 0.85 : 0.6,
-      roughness: 0.4,
-      emissive: armored ? 0x10202c : 0x6a1c10,
-      emissiveIntensity: 0.8,
+      color: cfg.color, metalness: cfg.armored ? 0.85 : 0.55, roughness: 0.45,
+      emissive: cfg.color, emissiveIntensity: 0.6,
     }),
   );
   g.add(body);
-  // Glowing "eye" (unlit, no PointLight — enemies spawn/die constantly and a
-  // changing light count would recompile every shader).
   const eye = new THREE.Mesh(
-    new THREE.SphereGeometry(0.32, 10, 10),
-    new THREE.MeshBasicMaterial({ color: armored ? 0x5ad0ff : 0xff7a3c }),
+    new THREE.SphereGeometry(cfg.radius * 0.28, 10, 10),
+    new THREE.MeshBasicMaterial({ color: cfg.eye }),
   );
-  eye.position.set(0, 0, size * 0.9);
+  eye.position.set(0, 0, cfg.radius * 0.9);
   g.add(eye);
   return { group: g, body };
 }
 
 export class Enemy {
-  constructor(scene, pos, armored = false) {
-    const built = makeRobotMesh(armored);
+  constructor(scene, pos, typeId = 'drone') {
+    const cfg = ENEMY_TYPES[typeId] || ENEMY_TYPES.drone;
+    this.type = typeId;
+    this.cfg = cfg;
+    const built = makeMesh(cfg);
     this.mesh = built.group;
     this.body = built.body;
-    this.baseEmissive = this.body.material.emissive.getHex();
+    this.baseEmissive = cfg.color;
     this.mesh.position.copy(pos);
     scene.add(this.mesh);
 
-    this.armored = armored;
     this.pos = this.mesh.position;
     this.vel = new THREE.Vector3();
-    this.hp = armored ? 110 : 50;
-    this.radius = armored ? 1.6 : 1.2;
+    this.hp = cfg.hp;
+    this.radius = cfg.radius;
+    this.armored = cfg.armored;
+    this.kamikaze = cfg.behavior === 'charge';
+    this.explodeDmg = cfg.explode || 0;
     this.alive = true;
     this.aware = false;
     this.flashTimer = 0;
 
     this.fireTimer = 1 + Math.random() * 1.5;
-    this.speed = 9 + Math.random() * 3;
-    this.detectRange = 60;
-    this.fireRange = 50;
+    this.speed = cfg.speed + Math.random() * 2;
+    this.detectRange = cfg.detect;
+    this.fireRange = 52;
     this.wanderDir = new THREE.Vector3().randomDirection();
     this.wanderTimer = 0;
     this.cellState = {};
+    this.strafeSign = Math.random() < 0.5 ? 1 : -1;
   }
 
   damage(amount) {
     this.hp -= amount;
-    this.flashTimer = 0.12; // brief white flash for clear hit feedback
+    this.flashTimer = 0.12;
     this.body.material.emissive.setHex(0xffffff);
     if (this.hp <= 0) this.alive = false;
     return !this.alive;
@@ -65,38 +85,47 @@ export class Enemy {
   update(dt, ship, level, fire) {
     const toPlayer = new THREE.Vector3().subVectors(ship.position, this.pos);
     const dist = toPlayer.length();
-    const sameAreaCells = this._reachable(level);
+    const sameArea = this._reachable(level);
     const playerCell = level.cellAt(ship.position);
-    const canSee = ship.alive && dist < this.detectRange && sameAreaCells.has(playerCell);
+    const canSee = ship.alive && dist < this.detectRange && sameArea.has(playerCell);
     this.aware = canSee;
 
-    // Decay the hit flash back to the base glow.
     if (this.flashTimer > 0) {
       this.flashTimer -= dt;
       if (this.flashTimer <= 0) this.body.material.emissive.setHex(this.baseEmissive);
     }
 
     if (canSee) {
-      // Approach but keep some distance.
       const dir = toPlayer.clone().normalize();
-      const desired = dist > 22 ? 1 : (dist < 12 ? -0.6 : 0);
-      this.vel.lerp(dir.multiplyScalar(this.speed * desired), 0.05);
+      this.mesh.lookAt(new THREE.Vector3().addVectors(this.pos, toPlayer));
 
-      // Face the player.
-      const look = new THREE.Vector3().addVectors(this.pos, toPlayer);
-      this.mesh.lookAt(look);
+      if (this.cfg.behavior === 'charge') {
+        // Kamikaze: rush straight in.
+        this.vel.lerp(dir.multiplyScalar(this.speed), 0.08);
+      } else if (this.cfg.behavior === 'strafe') {
+        // Wraith: orbit while approaching, hard to pin down.
+        const side = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
+        const want = dir.clone().multiplyScalar(dist > 26 ? 1 : -0.3)
+          .addScaledVector(side, this.strafeSign * 1.2).normalize();
+        this.vel.lerp(want.multiplyScalar(this.speed), 0.07);
+      } else {
+        // Standard: keep mid-range.
+        const desired = dist > 24 ? 1 : (dist < 13 ? -0.6 : 0);
+        this.vel.lerp(dir.multiplyScalar(this.speed * desired), 0.05);
+      }
 
-      // Fire with simple lead.
-      this.fireTimer -= dt;
-      if (this.fireTimer <= 0 && dist < this.fireRange) {
-        this.fireTimer = 1.4 + Math.random() * 1.2;
-        const lead = ship.velocity.clone().multiplyScalar(dist / 55);
-        const aim = new THREE.Vector3().addVectors(ship.position, lead).sub(this.pos).normalize();
-        const muzzle = this.pos.clone().addScaledVector(aim, 1.4);
-        fire(muzzle, aim, { kind: 'laser', owner: 'enemy', damage: 12 });
+      // Ranged fire (non-kamikaze).
+      if (this.cfg.fire) {
+        this.fireTimer -= dt;
+        if (this.fireTimer <= 0 && dist < this.fireRange) {
+          this.fireTimer = this.cfg.fire[0] + Math.random() * this.cfg.fire[1];
+          const lead = ship.velocity.clone().multiplyScalar(dist / 55);
+          const aim = new THREE.Vector3().addVectors(ship.position, lead).sub(this.pos).normalize();
+          const muzzle = this.pos.clone().addScaledVector(aim, this.radius + 0.3);
+          fire(muzzle, aim, { kind: 'laser', owner: 'enemy', damage: this.cfg.dmg });
+        }
       }
     } else {
-      // Wander.
       this.wanderTimer -= dt;
       if (this.wanderTimer <= 0) {
         this.wanderTimer = 2 + Math.random() * 2;
@@ -110,7 +139,6 @@ export class Enemy {
     level.collide(this.pos, this.radius, this.cellState);
   }
 
-  // Cells the enemy can shoot/see into: its own cell plus directly connected ones.
   _reachable(level) {
     const set = new Set();
     const here = level.cellAt(this.pos, this.cellState.cell ?? -1);
@@ -119,8 +147,7 @@ export class Enemy {
     const cell = level.cells[here];
     for (const key of Object.keys(cell.openings)) {
       if (cell.openings[key].length === 0) continue;
-      // Find neighbour sharing this face.
-      const f = key[0]; // + or -
+      const f = key[0];
       const axis = key[1];
       for (const other of level.cells) {
         if (other.index === here) continue;
@@ -133,7 +160,5 @@ export class Enemy {
     return set;
   }
 
-  destroy(scene) {
-    scene.remove(this.mesh);
-  }
+  destroy(scene) { scene.remove(this.mesh); }
 }

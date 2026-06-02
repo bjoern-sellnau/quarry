@@ -7,6 +7,7 @@ export class Input {
     this.mouseDX = 0;
     this.mouseDY = 0;
     this.firing = false;
+    this.firingSecondary = false;
     this.locked = false;
 
     window.addEventListener('keydown', (e) => {
@@ -32,10 +33,14 @@ export class Input {
 
     canvas.addEventListener('mousedown', (e) => {
       if (e.button === 0) this.firing = true;
+      if (e.button === 2) this.firingSecondary = true;
     });
     window.addEventListener('mouseup', (e) => {
       if (e.button === 0) this.firing = false;
+      if (e.button === 2) this.firingSecondary = false;
     });
+    // Right mouse fires the secondary — suppress the context menu.
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
   requestLock() {

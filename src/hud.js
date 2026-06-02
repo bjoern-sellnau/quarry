@@ -8,6 +8,8 @@ export class Hud {
     this.hullBar = document.getElementById('hull-bar');
     this.shieldBar = document.getElementById('shield-bar');
     this.weaponEl = document.getElementById('weapon');
+    this.weaponListEl = document.getElementById('weapon-list');
+    this.levelEl = document.getElementById('level-name');
     this.keysEl = document.getElementById('keys');
     this.flash = document.getElementById('damage-flash');
     this.toastEl = document.getElementById('toast');
@@ -29,12 +31,22 @@ export class Hud {
     this.shieldBar.style.width = `${Math.max(0, (ship.shield / ship.maxShield) * 100)}%`;
   }
 
+  setLevel(name) { if (this.levelEl) this.levelEl.textContent = name; }
+
   setWeapon(ship) {
-    const w = ship.weapon === 2
-      ? `ROCKETS ×${ship.rockets}`
-      : `LASER LVL ${ship.laserLevel}`;
-    this.weaponEl.textContent = w;
-    // Coloured keycard indicators.
+    // Active weapon line (laser shows its level) + rockets count.
+    const active = ship.weaponId === 'laser' ? `LASER LVL ${ship.laserLevel}` : ship.weaponId.toUpperCase();
+    this.weaponEl.textContent = `${active}   ⟂ ROCKETS ×${ship.rockets}`;
+
+    // Unlocked-weapon selector (1..N) with the active one highlighted.
+    if (this.weaponListEl) {
+      this.weaponListEl.innerHTML = ship.unlocked.map((id, i) => {
+        const on = id === ship.weaponId ? ' on' : '';
+        const label = id === 'laser' ? 'LASER' : id.toUpperCase();
+        return `<span class="wslot${on}">${i + 1} ${label}</span>`;
+      }).join('');
+    }
+
     const k = ship.keys;
     this.keysEl.innerHTML =
       `<span class="key red ${k.red ? 'on' : ''}">R</span>` +

@@ -52,7 +52,10 @@ export class Mission {
     this.escaped = false;
   }
 
-  build() {
+  // def: the level definition from levels.js (placements + reactor HP).
+  build(def) {
+    this.meltdownDuration = def.meltdownTime || 55;
+
     // Door slabs.
     for (const door of this.level.doors) {
       const mesh = doorSlab(door);
@@ -62,21 +65,20 @@ export class Mission {
       door.mesh = mesh;
     }
 
-    // Keycards: place each in a sensible chamber.
-    // red -> needed for reactor wing, hidden in secret vault A (cell 10)
-    // yellow -> needed for prison wing, in chamber C (cell 4)
-    // blue -> needed for cells, in prison hall (cell 14)
-    this._spawnKeycard('yellow', this.level.cells[4].center.clone().add(new THREE.Vector3(0, 6, 0)));
-    this._spawnKeycard('red', this.level.cells[10].center.clone());
-    this._spawnKeycard('blue', this.level.cells[14].center.clone().add(new THREE.Vector3(0, 0, -6)));
+    // Keycards from the level definition.
+    for (const k of def.keycards) {
+      const pos = this.level.cells[k.cell].center.clone();
+      pos.add(new THREE.Vector3(k.dx || 0, k.dy || 0, k.dz || 0));
+      this._spawnKeycard(k.kind, pos);
+    }
 
-    // Reactor core in the reactor room (cell 18).
-    const rc = this.level.cellByKind('reactor');
-    this.reactor = this._makeReactor(rc.center.clone());
+    // Reactor core (HP scales per level — no longer a one-shot).
+    const rc = this.level.cells[def.reactorCell];
+    this.reactor = this._makeReactor(rc.center.clone(), def.reactorHp);
     this.scene.add(this.reactor.group);
 
     // Exit marker.
-    this.exitCell = this.level.cellByKind('exit');
+    this.exitCell = this.level.cells[def.exitCell];
     const beacon = new THREE.Mesh(
       new THREE.ConeGeometry(2, 4, 4),
       new THREE.MeshBasicMaterial({ color: 0x44ff88, transparent: true, opacity: 0.5 }),
@@ -99,7 +101,7 @@ export class Mission {
     this.keycards.push({ kind, mesh: g, phase: Math.random() * 6.28 });
   }
 
-  _makeReactor(pos) {
+  _makeReactor(pos, hp = 1400) {
     const group = new THREE.Group();
     group.position.copy(pos);
     const core = new THREE.Mesh(
@@ -112,7 +114,7 @@ export class Mission {
       new THREE.MeshBasicMaterial({ color: 0xffaa44, wireframe: true, transparent: true, opacity: 0.4 }),
     );
     group.add(cage);
-    return { group, core, cage, pos: pos.clone(), hp: 250, radius: 5 };
+    return { group, core, cage, pos: pos.clone(), hp, maxHp: hp, radius: 5 };
   }
 
   // Try to open a keycard door the ship is near. Returns a message or null.

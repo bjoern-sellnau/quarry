@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Input } from './input.js';
-import { Ship } from './ship.js';
+import { Ship, PRIMARY } from './ship.js';
 import { Level } from './level.js';
 import { Projectiles, distSqPointSegment } from './weapons.js';
 import { Enemy } from './enemies.js';
@@ -8,129 +8,173 @@ import { Pickups, PICKUP_TYPES } from './pickups.js';
 import { Prisoners } from './prisoners.js';
 import { Mission } from './mission.js';
 import { Particles } from './particles.js';
+import { Debris } from './debris.js';
 import { AudioEngine } from './audio.js';
 import { Hud } from './hud.js';
+import { LEVELS } from './levels.js';
 
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-// Cap pixel ratio: rendering at 2x DPR is 4x the fragments and a common cause
-// of stutter on high-DPI displays. 1.5 keeps it sharp but much cheaper.
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 renderer.setSize(window.innerWidth, window.innerHeight);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0e151d);
-scene.fog = new THREE.FogExp2(0x0e151d, 0.005);
+scene.fog = new THREE.FogExp2(0x0e151d, 0.004);
 
-const camera = new THREE.PerspectiveCamera(78, window.innerWidth / window.innerHeight, 0.05, 1000);
+const camera = new THREE.PerspectiveCamera(78, window.innerWidth / window.innerHeight, 0.05, 2000);
 
-// Lighting: a fixed rig only. We deliberately avoid adding/removing lights at
-// runtime — changing the scene's light count forces Three.js to recompile
-// every material's shader, which is the main cause of frame stutter.
+// Fixed lighting rig (never changes count → no runtime shader recompiles).
 scene.add(new THREE.AmbientLight(0xaab8c4, 2.6));
 scene.add(new THREE.HemisphereLight(0xcfe6f2, 0x2a3440, 1.6));
-const headlamp = new THREE.PointLight(0xdaf0ff, 3.0, 160, 1.0);
+const headlamp = new THREE.PointLight(0xdaf0ff, 3.0, 200, 1.0);
 scene.add(headlamp);
 
 const input = new Input(canvas);
-const level = new Level();
-level.build(scene);
-
 const ship = new Ship(camera, input);
-const projectiles = new Projectiles(scene, level);
 const pickups = new Pickups(scene);
 const prisoners = new Prisoners(scene);
-const mission = new Mission(scene, level);
 const particles = new Particles(scene);
+const debris = new Debris(scene);
 const audio = new AudioEngine();
 const hud = new Hud();
 
-// Wall impacts: spark particles (colour by who fired).
-projectiles._onWallHit = (p) => {
-  const col = p.owner === 'player' ? (p.kind === 'rocket' ? 0xffae42 : 0x6cff7a) : 0xff5a3c;
-  particles.burst(p.mesh.position, col, 8, 9, 0.35);
-};
+// These are (re)created per level.
+let level = null;
+let mission = null;
+let projectiles = null;
 
 let enemies = [];
 let explosions = [];
+let levelIndex = 0;
 let score = 0;
 let secretsFound = 0;
 let secretsTotal = 0;
 let hostagesRescued = 0;
 let hostagesTotal = 0;
-let state = 'menu'; // menu | playing | over
+let state = 'menu'; // menu | playing | levelcomplete | over
 const shipCellState = {};
 
-// Rocket splash uses an expire hook from the projectile system.
-projectiles._onRocketExpire = (p) => {
-  spawnExplosion(p.mesh.position, 0xffae42, 2.2);
-  applySplash(p.mesh.position, p.splash, p.damage * 0.6, p.owner);
-};
+// ---------- Level loading ----------
+function loadLevel(index) {
+  levelIndex = index;
+  const def = LEVELS[index];
 
-// ---------- Enemy spawning ----------
-// Spawn bots through the chambers and mission wings.
-const SPAWN_CELLS = [2, 4, 4, 6, 8, 14, 18, 18];
-
-function spawnEnemies() {
+  // Tear down previous level objects.
   enemies.forEach((e) => e.destroy(scene));
   enemies = [];
-  SPAWN_CELLS.forEach((ci, n) => {
-    const cell = level.cells[ci];
-    const pos = new THREE.Vector3(
-      THREE.MathUtils.lerp(cell.min.x + 3, cell.max.x - 3, Math.random()),
-      THREE.MathUtils.lerp(cell.min.y + 3, cell.max.y - 3, Math.random()),
-      THREE.MathUtils.lerp(cell.min.z + 3, cell.max.z - 3, Math.random()),
-    );
-    // Every third bot is armored: heavier, can't be rammed safely.
-    enemies.push(new Enemy(scene, pos, n % 3 === 2));
-  });
+  explosions.forEach((e) => scene.remove(e.mesh));
+  explosions = [];
+  if (mission) mission.clear();
+  if (projectiles) projectiles.clear();
+  if (level) level.dispose(scene);
+  pickups.clear();
+  prisoners.clear();
+  particles.clear();
+  debris.clear();
+
+  // Build geometry + palette.
+  level = new Level({ cells: def.cells, doors: def.doors });
+  level.build(scene);
+  scene.background = new THREE.Color(def.palette.fog);
+  scene.fog = new THREE.FogExp2(def.palette.fog, 0.0035);
+
+  projectiles = new Projectiles(scene, level);
+  projectiles._onWallHit = (p) => {
+    const col = p.owner === 'player' ? (p.color || 0x6cff7a) : 0xff5a3c;
+    particles.burst(p.mesh.position, col, 8, 9, 0.35);
+  };
+  projectiles._onRocketExpire = (p) => {
+    spawnExplosion(p.mesh.position, 0xffae42, 2.4);
+    particles.burst(p.mesh.position, 0xffae42, 16, 14, 0.5);
+    applySplash(p.mesh.position, p.splash, p.damage * 0.6, p.owner);
+  };
+
+  mission = new Mission(scene, level);
+  mission.build(def);
+
+  // Ship: keep weapons, grant this level's new weapon.
+  ship.reset();
+  ship.position.copy(level.cells[def.startCell].center);
+  ship.position.y = level.cells[def.startCell].center.y; // hub centre
+  ship.unlock(def.weapon);
+  shipCellState.cell = def.startCell;
+
+  spawnEnemies(def);
+  spawnPickups(def);
+  spawnPrisoners(def);
+
+  hostagesRescued = 0;
+  hud.setHostages(0, hostagesTotal);
+  hud.setSecrets(secretsFound, secretsTotal);
+  hud.setLevel(def.name);
+  hud.setWeapon(ship);
+  hud.toast(`NEUE WAFFE: ${def.weaponLabel}`);
 }
 
-// ---------- Pickups & secrets ----------
-function spawnPickups() {
+// ---------- Spawning ----------
+function spawnEnemies(def) {
+  enemies = [];
+  // Spawnable rooms = large chambers (exclude tunnels and tiny cells).
+  const rooms = level.cells.filter((c) => {
+    const dx = c.max.x - c.min.x, dy = c.max.y - c.min.y, dz = c.max.z - c.min.z;
+    return Math.min(dx, dy, dz) >= 16 && c.kind !== 'exit' && c.index !== def.startCell;
+  });
+  const roster = def.enemyTypes;
+  for (let i = 0; i < def.enemyCount; i++) {
+    const cell = rooms[(Math.random() * rooms.length) | 0] || level.cells[def.startCell];
+    // Bias ~1/3 of spawns to the level's newest type for visible variety.
+    let type;
+    if (i % 3 === 0) type = roster[roster.length - 1];
+    else type = roster[(Math.random() * roster.length) | 0];
+    const pos = new THREE.Vector3(
+      THREE.MathUtils.lerp(cell.min.x + 4, cell.max.x - 4, Math.random()),
+      THREE.MathUtils.lerp(cell.min.y + 4, cell.max.y - 4, Math.random()),
+      THREE.MathUtils.lerp(cell.min.z + 4, cell.max.z - 4, Math.random()),
+    );
+    enemies.push(new Enemy(scene, pos, type));
+  }
+}
+
+function spawnPickups(def) {
   pickups.clear();
   secretsFound = 0;
   secretsTotal = 0;
 
-  const scatter = [
-    { type: 'shield', cell: 2 },
-    { type: 'hull', cell: 4 },
-    { type: 'shield', cell: 6 },
-    { type: 'hull', cell: 8 },
-    { type: 'laser', cell: 4 },   // laser upgrade in chamber C
-    { type: 'laser', cell: 6 },   // laser upgrade in chamber D
-    { type: 'rockets', cell: 2 }, // rocket resupply
-  ];
-  for (const s of scatter) {
-    pickups.spawn(s.type, level.cells[s.cell].center.clone());
-  }
+  const rooms = level.cells.filter((c) => {
+    const dx = c.max.x - c.min.x, dy = c.max.y - c.min.y, dz = c.max.z - c.min.z;
+    return Math.min(dx, dy, dz) >= 16 && c.kind !== 'reactor' && c.kind !== 'exit';
+  });
+  const drop = (type, cell) => pickups.spawn(type, cell.center.clone());
+  rooms.forEach((cell, i) => {
+    const t = ['shield', 'hull', 'laser', 'rockets'][i % 4];
+    drop(t, cell);
+  });
 
-  // Artifacts live in the secret vaults; they count as the level's secrets.
-  for (const cell of level.cells) {
-    if (cell.secret) {
-      secretsTotal++;
-      pickups.spawn('artifact', cell.center.clone(), { secret: true });
-    }
+  // Artifacts in the secret vaults count as the level's secrets.
+  for (const ci of def.secretCells) {
+    const cell = level.cells[ci];
+    if (!cell) continue;
+    secretsTotal++;
+    pickups.spawn('artifact', cell.center.clone(), { secret: true });
   }
   hud.setSecrets(secretsFound, secretsTotal);
 }
 
-function spawnPrisoners() {
+function spawnPrisoners(def) {
   prisoners.clear();
-  // One hostage in each prison cell (15, 16).
-  prisoners.spawn(level.cells[15].center.clone());
-  prisoners.spawn(level.cells[16].center.clone());
-  prisoners.setTotal(2);
-  hostagesTotal = 2;
-  hostagesRescued = 0;
-  hud.setHostages(0, hostagesTotal);
+  for (const ci of def.prisonCells) {
+    prisoners.spawn(level.cells[ci].center.clone());
+  }
+  prisoners.setTotal(def.prisonCells.length);
+  hostagesTotal = def.prisonCells.length;
 }
 
 function maybeDropPickup(pos) {
   const r = Math.random();
-  if (r < 0.18) pickups.spawn('hull', pos.clone());
-  else if (r < 0.34) pickups.spawn('shield', pos.clone());
-  else if (r < 0.42) pickups.spawn('rockets', pos.clone());
+  if (r < 0.16) pickups.spawn('hull', pos.clone());
+  else if (r < 0.30) pickups.spawn('shield', pos.clone());
+  else if (r < 0.40) pickups.spawn('rockets', pos.clone());
 }
 
 function onCollect(type, pickup) {
@@ -146,15 +190,13 @@ function onCollect(type, pickup) {
       ship.laserLevel++;
       hud.toast('LASER UPGRADED  ▶ LVL ' + ship.laserLevel);
     } else {
-      score += 100; hud.setScore(score);
-      hud.toast('LASER MAXED  +100');
+      score += 100; hud.setScore(score); hud.toast('LASER MAXED  +100');
     }
   } else if (type === 'rockets') {
     ship.rockets += 3;
     hud.toast('+3 ROCKETS');
   } else if (type === 'artifact') {
-    score += 500;
-    hud.setScore(score);
+    score += 500; hud.setScore(score);
   }
   if (pickup.secret) {
     secretsFound++;
@@ -166,29 +208,33 @@ function onCollect(type, pickup) {
 // ---------- Explosions & splash ----------
 function spawnExplosion(pos, color = 0xff7a3c, scale = 1) {
   const geo = new THREE.SphereGeometry(0.6 * scale, 10, 10);
-  // Unlit emissive sphere — no PointLight, so no shader recompiles.
   const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 1 });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.position.copy(pos);
   scene.add(mesh);
-  explosions.push({ mesh, t: 0, life: 0.5, scale });
+  explosions.push({ mesh, t: 0, life: 0.55, scale });
 }
 
-// Rocket splash: damage every enemy (and the reactor) within radius.
+function killEnemy(e) {
+  spawnExplosion(e.pos, 0xff7a3c, 2.4);                 // bigger blast
+  spawnExplosion(e.pos, 0xffd27a, 1.4);
+  particles.burst(e.pos, 0xffd27a, 36, 22, 0.7);
+  debris.burst(e.pos, e.cfg.color, e.cfg.big ? 14 : 9, 60); // floating wreckage, 60s
+  audio.enemyKill();
+  maybeDropPickup(e.pos);
+  score += e.armored ? 200 : 100;
+  hud.setScore(score);
+}
+
 function applySplash(center, radius, damage, owner) {
-  if (owner === 'player') {
-    for (const e of enemies) {
-      if (e.alive && e.pos.distanceTo(center) < radius + e.radius) {
-        if (e.damage(damage)) {
-          spawnExplosion(e.pos, 0xff7a3c, 1.4);
-          maybeDropPickup(e.pos);
-          score += 100; hud.setScore(score);
-        }
-      }
+  if (owner !== 'player') return;
+  for (const e of enemies) {
+    if (e.alive && e.pos.distanceTo(center) < radius + e.radius) {
+      if (e.damage(damage)) killEnemy(e);
     }
-    if (mission.reactorAlive && mission.reactor.pos.distanceTo(center) < radius + mission.reactor.radius) {
-      if (mission.damageReactor(damage)) onReactorDestroyed();
-    }
+  }
+  if (mission.reactorAlive && mission.reactor.pos.distanceTo(center) < radius + mission.reactor.radius) {
+    if (mission.damageReactor(damage)) onReactorDestroyed();
   }
 }
 
@@ -199,14 +245,11 @@ function updateExplosions(dt) {
     const k = e.t / e.life;
     e.mesh.scale.setScalar(1 + k * 6 * e.scale);
     e.mesh.material.opacity = 1 - k;
-    if (e.t >= e.life) {
-      scene.remove(e.mesh);
-      explosions.splice(i, 1);
-    }
+    if (e.t >= e.life) { scene.remove(e.mesh); explosions.splice(i, 1); }
   }
 }
 
-// ---------- Combat resolution ----------
+// ---------- Combat ----------
 function fire(origin, dir, opts) {
   projectiles.spawn(origin, dir, opts);
   if (opts.owner === 'player') {
@@ -215,9 +258,10 @@ function fire(origin, dir, opts) {
 }
 
 function onReactorDestroyed() {
-  hud.toast('☢ REACTOR DESTROYED — ESCAPE NOW! ☢');
-  spawnExplosion(mission.reactor.pos, 0xffff66, 4);
-  particles.burst(mission.reactor.pos, 0xffff66, 60, 22, 0.9);
+  hud.toast('☢ REAKTOR ZERSTÖRT — RAUS HIER! ☢');
+  spawnExplosion(mission.reactor.pos, 0xffff66, 6);
+  particles.burst(mission.reactor.pos, 0xffff66, 80, 26, 1.0);
+  debris.burst(mission.reactor.pos, 0xff8844, 24, 60);
   audio.bigExplosion();
 }
 
@@ -228,44 +272,33 @@ function resolveHits() {
 
     if (p.owner === 'player') {
       let consumed = false;
-
-      // Secret doors open when shot.
       if (mission.hitSecretDoors(p.prev, ppos, distSqPointSegment)) {
-        hud.toast('SECRET DOOR REVEALED');
+        hud.toast('GEHEIMTÜR ENTDECKT'); audio.door();
       }
-
-      // Reactor.
       if (mission.reactorHitTest(p.prev, ppos, distSqPointSegment)) {
-        spawnExplosion(ppos, 0xffd27a, 0.8);
+        spawnExplosion(ppos, 0xffd27a, 0.9);
+        particles.burst(ppos, 0xffd27a, 10, 12, 0.4);
+        audio.enemyHit();
         if (mission.damageReactor(p.damage)) onReactorDestroyed();
         if (p.kind === 'rocket') applySplash(ppos, p.splash, p.damage * 0.6, 'player');
         projectiles.consume(p);
         continue;
       }
-
-      // Enemies (swept test).
       for (const e of enemies) {
         if (!e.alive) continue;
         const hitR = e.radius + p.radius;
         if (distSqPointSegment(e.pos, p.prev, ppos) < hitR * hitR) {
           const dead = e.damage(p.damage);
-          spawnExplosion(ppos, 0xffd27a, 0.5);
+          spawnExplosion(ppos, 0xffd27a, 0.55);
           particles.burst(ppos, 0xffd27a, 12, 12, 0.4);
           audio.enemyHit();
           if (p.kind === 'rocket') {
-            spawnExplosion(ppos, 0xffae42, 2.2);
+            spawnExplosion(ppos, 0xffae42, 2.4);
             applySplash(ppos, p.splash, p.damage * 0.6, 'player');
           }
           projectiles.consume(p);
           consumed = true;
-          if (dead) {
-            spawnExplosion(e.pos, 0xff7a3c, 1.4);
-            particles.burst(e.pos, 0xff7a3c, 24, 16, 0.6);
-            audio.enemyKill();
-            maybeDropPickup(e.pos);
-            score += 100;
-            hud.setScore(score);
-          }
+          if (dead) killEnemy(e);
           break;
         }
       }
@@ -282,33 +315,33 @@ function resolveHits() {
       }
     }
   }
-
   enemies = enemies.filter((e) => e.alive);
   hud.setEnemies(enemies.length);
 }
 
-// Ramming: fly into a bot. Light bots are crushed (small hull cost); armored
-// bots shrug it off and hurt you, with a knockback so you don't stick to them.
+// Ramming + kamikaze contact.
 function resolveRamming() {
   if (!ship.alive) return;
   for (const e of enemies) {
     if (!e.alive) continue;
     const reach = ship.radius + e.radius;
     if (ship.position.distanceTo(e.pos) >= reach) continue;
-    if (!e.armored) {
+
+    if (e.kamikaze) {
       e.alive = false;
-      spawnExplosion(e.pos, 0xff7a3c, 1.4);
-      particles.burst(e.pos, 0xff7a3c, 24, 16, 0.6);
-      audio.enemyKill();
-      maybeDropPickup(e.pos);
+      killEnemy(e);
+      spawnExplosion(e.pos, 0xffe033, 3);
+      ship.takeDamage(e.explodeDmg);
+      hud.damageFlash(); audio.playerHit();
+    } else if (!e.armored) {
+      e.alive = false;
+      killEnemy(e);
       ship.takeDamage(8);
       hud.damageFlash();
-      score += 100; hud.setScore(score);
     } else {
       e.damage(18);
       ship.takeDamage(18);
-      hud.damageFlash();
-      audio.playerHit();
+      hud.damageFlash(); audio.playerHit();
       particles.burst(ship.position, 0x5ad0ff, 10, 10, 0.4);
       const away = ship.position.clone().sub(e.pos).normalize();
       ship.velocity.addScaledVector(away, 22);
@@ -319,7 +352,6 @@ function resolveRamming() {
   hud.setEnemies(enemies.length);
 }
 
-// Music intensity from the combat situation.
 function combatIntensity() {
   if (mission.meltdown) return 1;
   let aware = 0;
@@ -327,74 +359,92 @@ function combatIntensity() {
   return Math.min(1, aware / 3);
 }
 
-// ---------- Game state ----------
+// ---------- State / screens ----------
 const overlay = document.getElementById('overlay');
 const screenStart = document.getElementById('screen-start');
 const screenEnd = document.getElementById('screen-end');
+const screenNext = document.getElementById('screen-next');
 
-function startGame() {
-  audio.init();          // user gesture — unlock + start music
+function startCampaign() {
+  audio.init();
   audio.setEnabled(true);
   score = 0;
-  ship.reset();
-  shipCellState.cell = 0;
-  projectiles.clear();
-  particles.clear();
-  explosions.forEach((e) => { scene.remove(e.mesh); });
-  explosions = [];
-
-  // Reset mission state by rebuilding doors/keycards/reactor.
-  mission.clear();
-  // Re-close every door for a fresh run.
-  for (const d of level.doors) { d.open = false; }
-  mission.reactorAlive = true;
-  mission.meltdown = false;
-  mission.escaped = false;
-  mission.timeLeft = 0;
-  mission.build();
-
-  spawnEnemies();
-  spawnPickups();
-  spawnPrisoners();
+  ship.unlocked = ['laser'];
+  ship.weaponId = 'laser';
+  ship.laserLevel = 1;
+  ship.rockets = 5;
   hud.setScore(0);
-  hud.setEnemies(enemies.length);
-  hud.setWeapon(ship);
+  loadLevel(0);
   hud.show();
   overlay.classList.add('hidden');
   state = 'playing';
   input.requestLock();
 }
 
+function completeLevel() {
+  state = 'levelcomplete';
+  hud.hide();
+  document.exitPointerLock?.();
+  audio.setIntensity(0);
+  const bonus = hostagesRescued * 1000 + secretsFound * 300 + 500;
+  score += bonus;
+  hud.setScore(score);
+
+  const last = levelIndex >= LEVELS.length - 1;
+  if (last) {
+    endGame(true, `Kampagne abgeschlossen! Alle ${LEVELS.length} Sektoren befreit.`);
+    return;
+  }
+  document.getElementById('next-title').textContent = `SEKTOR ${levelIndex + 1} GESCHAFFT`;
+  document.getElementById('next-msg').textContent =
+    `Reaktor zerstört, ${hostagesRescued}/${hostagesTotal} Geiseln gerettet, ${secretsFound}/${secretsTotal} Secrets. Bonus +${bonus}. ` +
+    `Nächster Sektor: ${LEVELS[levelIndex + 1].name} — neue Waffe & neuer Gegnertyp.`;
+  document.getElementById('next-score').textContent = score;
+  screenStart.classList.add('hidden');
+  screenEnd.classList.add('hidden');
+  screenNext.classList.remove('hidden');
+  overlay.classList.remove('hidden');
+}
+
 function endGame(win, reason) {
   state = 'over';
   hud.hide();
   document.exitPointerLock?.();
-  const title = document.getElementById('end-title');
-  const msg = document.getElementById('end-msg');
-  title.textContent = win ? 'ESCAPED' : 'MISSION FAILED';
-  title.className = win ? 'win' : 'lose';
   audio.setIntensity(0);
   audio.setEnabled(false);
   if (!win) audio.bigExplosion();
-  msg.textContent = reason;
+  const title = document.getElementById('end-title');
+  title.textContent = win ? 'SIEG' : 'MISSION GESCHEITERT';
+  title.className = win ? 'win' : 'lose';
+  document.getElementById('end-msg').textContent = reason;
   document.getElementById('final-score').textContent = score;
   screenStart.classList.add('hidden');
+  screenNext.classList.add('hidden');
   screenEnd.classList.remove('hidden');
   overlay.classList.remove('hidden');
 }
 
-document.getElementById('btn-start').addEventListener('click', startGame);
+document.getElementById('btn-start').addEventListener('click', startCampaign);
 document.getElementById('btn-restart').addEventListener('click', () => {
   screenEnd.classList.add('hidden');
   screenStart.classList.remove('hidden');
-  startGame();
+  startCampaign();
+});
+document.getElementById('btn-next').addEventListener('click', () => {
+  screenNext.classList.add('hidden');
+  audio.setEnabled(true);
+  loadLevel(levelIndex + 1);
+  hud.show();
+  overlay.classList.add('hidden');
+  state = 'playing';
+  input.requestLock();
 });
 
 // Open keycard doors with F when close.
 window.addEventListener('keydown', (e) => {
   if (state === 'playing' && e.code === 'KeyF') {
     const msg = mission.tryOpenDoors(ship);
-    if (msg) { hud.toast(msg); if (msg.includes('OPENED')) audio.door(); }
+    if (msg) { hud.toast(msg); if (msg.includes('OPEN') || msg.includes('GEÖFFNET')) audio.door(); }
   }
 });
 
@@ -419,33 +469,29 @@ function animate() {
       hostagesRescued++;
       ship.hostagesAboard++;
       hud.setHostages(hostagesRescued, hostagesTotal);
-      hud.toast('HOSTAGE RESCUED  (' + hostagesRescued + '/' + hostagesTotal + ')');
+      hud.toast('GEISEL GERETTET  (' + hostagesRescued + '/' + hostagesTotal + ')');
       score += 250; hud.setScore(score);
     });
-    mission.update(dt, ship, (kind) => {
-      hud.toast(kind.toUpperCase() + ' KEYCARD');
-    });
+    mission.update(dt, ship, (kind) => hud.toast(kind.toUpperCase() + ' KEYCARD'));
     updateExplosions(dt);
     particles.update(dt);
+    debris.update(dt);
     audio.setIntensity(combatIntensity());
     hud.setShip(ship);
     hud.setWeapon(ship);
     hud.setMeltdown(mission.meltdown, mission.timeLeft);
 
-    // End conditions.
     if (!ship.alive) {
       endGame(false, 'Dein Schiff wurde zerstört.');
     } else if (mission.escaped) {
-      let bonus = hostagesRescued * 1000 + secretsFound * 300;
-      score += bonus;
-      hud.setScore(score);
-      endGame(true, `Reaktor zerstört, ${hostagesRescued}/${hostagesTotal} Geiseln gerettet, ${secretsFound}/${secretsTotal} Secrets. Bonus +${bonus}.`);
+      completeLevel();
     } else if (mission.meltdown && mission.timeLeft <= 0) {
       endGame(false, 'Der Reaktor ist explodiert, bevor du entkommen konntest.');
     }
   } else {
     updateExplosions(dt);
     particles.update(dt);
+    debris.update(dt);
   }
 
   renderer.render(scene, camera);

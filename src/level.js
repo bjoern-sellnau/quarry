@@ -16,8 +16,8 @@ const FACES = {
   '-z': { axis: 'z', sign: -1, t: ['x', 'y'] },
 };
 
-// Cell layout. Each cell is a box [min..max]. Cells that share a face plane
-// (and overlap on it) become connected by a doorway automatically.
+// (Legacy single-level layout retained for reference; the campaign now drives
+// geometry from src/levels.js specs passed to the Level constructor.)
 const CELLS = [
   { min: [-15, -12, -15], max: [15, 12, 15], color: 0x5c7280 },   // 0 start chamber
   { min: [-4, -4, -45], max: [4, 4, -15], color: 0x4e636f },      // 1 tunnel A->B (-z)
@@ -63,8 +63,12 @@ const DOORS = [
 ];
 
 export class Level {
-  constructor() {
-    this.cells = CELLS.map((c, i) => ({
+  // spec: { cells:[{min,max,color,secret?,kind?}], doors:[{between,kind}] }
+  // Defaults to the legacy layout when no spec is given.
+  constructor(spec) {
+    const src = spec || { cells: CELLS, doors: DOORS };
+    this._doorSpec = src.doors;
+    this.cells = src.cells.map((c, i) => ({
       index: i,
       min: new THREE.Vector3(...c.min),
       max: new THREE.Vector3(...c.max),
@@ -112,7 +116,7 @@ export class Level {
   // Match each DOOR to the shared opening rect between its two cells.
   _attachDoors() {
     this.doors = [];
-    for (const d of DOORS) {
+    for (const d of this._doorSpec) {
       const [a, b] = d.between;
       const A = this.cells[a];
       let found = null;
@@ -187,9 +191,24 @@ export class Level {
     const lgeo = new THREE.BufferGeometry();
     lgeo.setAttribute('position', new THREE.Float32BufferAttribute(linePos, 3));
     const lineMat = new THREE.LineBasicMaterial({ color: 0x7fd4e6, transparent: true, opacity: 0.45 });
-    scene.add(new THREE.LineSegments(lgeo, lineMat));
+    const lines = new THREE.LineSegments(lgeo, lineMat);
+    scene.add(lines);
 
     this.group = mesh;
+    this.lines = lines;
+  }
+
+  dispose(scene) {
+    if (this.group) {
+      scene.remove(this.group);
+      this.group.geometry.dispose();
+      this.group.material.dispose();
+    }
+    if (this.lines) {
+      scene.remove(this.lines);
+      this.lines.geometry.dispose();
+      this.lines.material.dispose();
+    }
   }
 
   _faceQuads(cell, key) {

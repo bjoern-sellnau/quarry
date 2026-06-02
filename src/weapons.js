@@ -16,14 +16,20 @@ export function distSqPointSegment(c, a, b) {
 
 const LASER_GEO = new THREE.CapsuleGeometry(0.16, 1.4, 4, 8);
 const ROCKET_GEO = new THREE.CapsuleGeometry(0.3, 1.0, 6, 10);
+const BIG_GEO = new THREE.CapsuleGeometry(0.34, 1.8, 6, 10);
 const ENEMY_GEO = new THREE.SphereGeometry(0.35, 8, 8);
 const Z = new THREE.Vector3(0, 0, 1);
 
-const MATS = {
-  playerLaser: new THREE.MeshBasicMaterial({ color: 0x6cff7a }),
-  rocket: new THREE.MeshBasicMaterial({ color: 0xffd27a }),
-  enemyLaser: new THREE.MeshBasicMaterial({ color: 0xff5a3c }),
-};
+// Cache one material per bolt colour so we never allocate per shot and never
+// add lights (which would force shader recompiles).
+const COLOR_MATS = new Map();
+function matFor(color) {
+  if (!COLOR_MATS.has(color)) {
+    COLOR_MATS.set(color, new THREE.MeshBasicMaterial({ color }));
+  }
+  return COLOR_MATS.get(color);
+}
+const ENEMY_MAT = new THREE.MeshBasicMaterial({ color: 0xff5a3c });
 
 export class Projectiles {
   constructor(scene, level) {
@@ -40,9 +46,9 @@ export class Projectiles {
     const isRocket = kind === 'rocket';
 
     let geo, mat;
-    if (isRocket) { geo = ROCKET_GEO; mat = MATS.rocket; }
-    else if (isPlayer) { geo = LASER_GEO; mat = MATS.playerLaser; }
-    else { geo = ENEMY_GEO; mat = MATS.enemyLaser; }
+    if (isRocket) { geo = ROCKET_GEO; mat = matFor(opts.color || 0xffd27a); }
+    else if (isPlayer) { geo = opts.big ? BIG_GEO : LASER_GEO; mat = matFor(opts.color || 0x6cff7a); }
+    else { geo = ENEMY_GEO; mat = ENEMY_MAT; }
 
     // Bolts use unlit emissive (MeshBasicMaterial) and carry no PointLight, so
     // spawning/despawning them never changes the scene light count.
@@ -59,11 +65,12 @@ export class Projectiles {
       ttl: isRocket ? 5 : 3,
       owner,
       kind,
+      color: opts.color,
       damage: opts.damage,
       splash: opts.splash || 0,
-      radius: isRocket ? 0.7 : (isPlayer ? 1.0 : 0.6),
-      // Player lasers ricochet off walls a couple of times; rockets explode.
-      bounces: (kind === 'laser' && isPlayer) ? 2 : 0,
+      radius: isRocket ? 0.7 : (isPlayer ? (opts.big ? 1.1 : 1.0) : 0.6),
+      // Ricochets per the weapon definition; rockets always explode (0).
+      bounces: isRocket ? 0 : (opts.bounce || 0),
       cell: -1,
     });
   }

@@ -6,6 +6,17 @@ const AXIS_X = new THREE.Vector3(1, 0, 0);
 const AXIS_Y = new THREE.Vector3(0, 1, 0);
 const AXIS_Z = new THREE.Vector3(0, 0, 1);
 
+// Primary weapon definitions (Descent-inspired). `fan` fires multiple bolts in
+// an arc; `spread` adds random scatter; `bounce` lets bolts ricochet.
+export const PRIMARY = {
+  laser:  { name: 'LASER',      rate: 0.15, kind: 'laser',  speed: 120, color: 0x6cff7a, bounce: 2 },
+  vulcan: { name: 'VULCAN',     rate: 0.06, kind: 'vulcan', speed: 175, color: 0xffe27a, bounce: 0, dmg: 13, spread: 0.05 },
+  spread: { name: 'SPREADFIRE', rate: 0.20, kind: 'spread', speed: 110, color: 0xff9a3c, bounce: 1, dmg: 18, fan: 5, fanAngle: 0.16 },
+  plasma: { name: 'PLASMA',     rate: 0.09, kind: 'plasma', speed: 150, color: 0x4ad0ff, bounce: 0, dmg: 38, big: true },
+  fusion: { name: 'FUSION',     rate: 0.45, kind: 'fusion', speed: 130, color: 0xff44ff, bounce: 0, dmg: 130, big: true },
+  helix:  { name: 'HELIX',      rate: 0.12, kind: 'helix',  speed: 140, color: 0xaaff44, bounce: 1, dmg: 30, fan: 3, fanAngle: 0.12 },
+};
+
 export class Ship {
   constructor(camera, input) {
     this.camera = camera;
@@ -34,15 +45,16 @@ export class Ship {
     this.alive = true;
 
     this.fireCooldown = 0;
+    this.secCooldown = 0;
 
     // ---- Weapons ----
-    // Laser level 1-3 (more bolts / more damage). Rockets are a limited ammo
-    // secondary. weapon: 1 = laser, 2 = rockets.
-    this.weapon = 1;
+    // Primary weapons are unlocked across the campaign (laser, vulcan, ...).
+    // Rockets are the secondary (right mouse). Laser still has levels 1-3.
+    this.unlocked = ['laser'];
+    this.weaponId = 'laser';
     this.laserLevel = 1;
     this.maxLaserLevel = 3;
-    this.rockets = 3;
-    this.laserRate = 0.14;
+    this.rockets = 5;
     this.rocketRate = 0.7;
 
     // Keycards collected this level.
@@ -50,6 +62,8 @@ export class Ship {
     this.hostagesAboard = 0;
   }
 
+  // Per-level reset of position/health/keys; weapons persist across the
+  // campaign (handled by main), so only clamp the selected weapon here.
   reset() {
     this.position.set(0, 0, 0);
     this.quaternion.identity();
@@ -58,11 +72,15 @@ export class Ship {
     this.shield = this.maxShield;
     this.alive = true;
     this.fireCooldown = 0;
-    this.weapon = 1;
-    this.laserLevel = 1;
-    this.rockets = 3;
+    this.secCooldown = 0;
     this.keys = { red: false, blue: false, yellow: false };
     this.hostagesAboard = 0;
+    if (!this.unlocked.includes(this.weaponId)) this.weaponId = this.unlocked[0];
+  }
+
+  unlock(id) {
+    if (!this.unlocked.includes(id)) this.unlocked.push(id);
+    this.weaponId = id; // auto-select the newly granted weapon
   }
 
   forward() {
@@ -150,38 +168,73 @@ export class Ship {
       this.shield = Math.min(this.maxShield, this.shield + this.shieldRegen * dt);
     }
 
-    // ---- Weapon select ----
-    if (input.isDown('Digit1')) this.weapon = 1;
-    if (input.isDown('Digit2') && this.rockets > 0) this.weapon = 2;
+    // ---- Weapon select (number keys index into the unlocked list) ----
+    for (let i = 1; i <= this.unlocked.length && i <= 9; i++) {
+      if (input.isDown('Digit' + i)) this.weaponId = this.unlocked[i - 1];
+    }
 
-    // ---- Firing ----
+    // ---- Primary fire ----
     this.fireCooldown -= dt;
+    this.secCooldown -= dt;
     if (input.firing && this.fireCooldown <= 0 && this.alive) {
+      this._firePrimary(fireCallback);
+    }
+
+    // ---- Secondary fire (rockets, right mouse) ----
+    if (input.firingSecondary && this.secCooldown <= 0 && this.rockets > 0 && this.alive) {
+      this.secCooldown = this.rocketRate;
+      this.rockets--;
       const dir = this.forward();
       const base = this.position.clone().addScaledVector(dir, this.radius + 1.0);
-
-      if (this.weapon === 2 && this.rockets > 0) {
-        this.fireCooldown = this.rocketRate;
-        this.rockets--;
-        fireCallback(base, dir, { kind: 'rocket', owner: 'player', damage: 120, splash: 6, speed: 60 });
-        if (this.rockets === 0) this.weapon = 1;
-      } else {
-        this.fireCooldown = this.laserRate;
-        const dmg = 34 + (this.laserLevel - 1) * 16; // L1 34, L2 50, L3 66
-        // Level decides how many parallel bolts fire.
-        const r = this.right();
-        const offsets = this.laserLevel === 1 ? [0]
-          : this.laserLevel === 2 ? [-0.6, 0.6]
-          : [-0.8, 0, 0.8];
-        for (const o of offsets) {
-          const muzzle = base.clone().addScaledVector(r, o);
-          fireCallback(muzzle, dir, { kind: 'laser', owner: 'player', damage: dmg });
-        }
-      }
+      fireCallback(base, dir, { kind: 'rocket', owner: 'player', damage: 120, splash: 6, speed: 60, color: 0xffae42 });
     }
 
     // ---- Sync camera ----
     this.camera.position.copy(this.position);
     this.camera.quaternion.copy(this.quaternion);
+  }
+
+  _firePrimary(fireCallback) {
+    const w = PRIMARY[this.weaponId] || PRIMARY.laser;
+    this.fireCooldown = w.rate;
+    const dir = this.forward();
+    const base = this.position.clone().addScaledVector(dir, this.radius + 1.0);
+    const right = this.right();
+    const up = this.up();
+    const common = { kind: w.kind, owner: 'player', speed: w.speed, color: w.color, bounce: w.bounce, big: w.big };
+
+    if (this.weaponId === 'laser') {
+      const dmg = 34 + (this.laserLevel - 1) * 16; // L1 34 / L2 50 / L3 66
+      const offsets = this.laserLevel === 1 ? [0] : this.laserLevel === 2 ? [-0.6, 0.6] : [-0.8, 0, 0.8];
+      for (const o of offsets) {
+        fireCallback(base.clone().addScaledVector(right, o), dir, { ...common, damage: dmg });
+      }
+      return;
+    }
+
+    if (w.fan) {
+      // Fan of bolts spread across an arc around the ship's up axis.
+      const half = (w.fan - 1) / 2;
+      for (let i = 0; i < w.fan; i++) {
+        const ang = (i - half) * w.fanAngle;
+        const d = dir.clone().applyAxisAngle(up, ang);
+        // Helix weapons also stagger vertically for a corkscrew look.
+        const vo = this.weaponId === 'helix' ? Math.sin(i * 2.1) * 0.4 : 0;
+        fireCallback(base.clone().addScaledVector(up, vo), d, { ...common, damage: w.dmg });
+      }
+      return;
+    }
+
+    if (w.spread) {
+      // Vulcan: rapid single bolt with slight random scatter.
+      const d = dir.clone()
+        .applyAxisAngle(up, (Math.random() - 0.5) * w.spread)
+        .applyAxisAngle(right, (Math.random() - 0.5) * w.spread);
+      fireCallback(base, d, { ...common, damage: w.dmg });
+      return;
+    }
+
+    // Single heavy bolt (plasma / fusion).
+    fireCallback(base, dir, { ...common, damage: w.dmg });
   }
 }

@@ -10,7 +10,7 @@
   <canvas id="game"></canvas>
 
   <!-- Build/version stamp (bumped on every build) -->
-  <div id="build-stamp">quarry | pre-alpha | build 0.23</div>
+  <div id="build-stamp">quarry | pre-alpha | build 0.24</div>
 
   <!-- HUD -->
   <div id="hud" class="hidden">
@@ -19,6 +19,8 @@
       <div class="ch-line ch-v"></div>
       <div class="ch-dot"></div>
     </div>
+
+    <div id="level-name"></div>
 
     <div id="hud-top">
       <div class="hud-stat">
@@ -54,6 +56,7 @@
 
     <div id="hud-weapon">
       <span id="weapon">LASER LVL 1</span>
+      <span id="weapon-list"></span>
       <span id="keys"></span>
     </div>
 
@@ -79,15 +82,23 @@
           </div>
           <div class="ctrl-col">
             <h3>COMBAT &amp; MISSION</h3>
-            <div><kbd>Linke Maus</kbd> Feuern</div>
-            <div><kbd>1</kbd><kbd>2</kbd> Laser / Raketen</div>
+            <div><kbd>Linke Maus</kbd> Primärwaffe</div>
+            <div><kbd>Rechte Maus</kbd> Raketen</div>
+            <div><kbd>1</kbd>…<kbd>5</kbd> Waffe wählen</div>
             <div><kbd>F</kbd> Tür mit Keycard öffnen</div>
             <div><kbd>Shift</kbd> Boost &nbsp; <kbd>Esc</kbd> Maus frei</div>
-            <div class="hint">Finde Keycards, rette Geiseln, sprenge den Reaktor (rote Tür) und flieh durch den Notausgang, bevor der Countdown abläuft. Geheimtüren öffnen sich beim Beschuss.</div>
+            <div class="hint">5 Sektoren. Jeder bringt eine neue Waffe (Vulcan, Spreadfire, Plasma, Fusion, Helix) und einen neuen Gegnertyp — Waffen nimmst du mit. Keycards finden, Geiseln retten, Reaktor sprengen (rote Tür), durch den Notausgang fliehen, bevor der Countdown abläuft. Geheimtüren öffnen sich beim Beschuss.</div>
           </div>
         </div>
-        <button id="btn-start" class="btn">MISSION STARTEN</button>
+        <button id="btn-start" class="btn">KAMPAGNE STARTEN</button>
         <p class="lock-note">Klick aktiviert die Maussteuerung (Pointer Lock).</p>
+      </div>
+
+      <div id="screen-next" class="hidden">
+        <h2 id="next-title" class="win">SEKTOR GESCHAFFT</h2>
+        <p id="next-msg"></p>
+        <p class="final">SCORE: <span id="next-score">0</span></p>
+        <button id="btn-next" class="btn">NÄCHSTER SEKTOR</button>
       </div>
 
       <div id="screen-end" class="hidden">
