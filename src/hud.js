@@ -34,8 +34,11 @@ export class Hud {
   setLevel(name) { if (this.levelEl) this.levelEl.textContent = name; }
 
   setWeapon(ship) {
-    // Active weapon line (laser shows its level) + rockets count.
-    const active = ship.weaponId === 'laser' ? `LASER LVL ${ship.laserLevel}` : ship.weaponId.toUpperCase();
+    // Active weapon line (laser shows level, vulcan shows ammo) + rockets.
+    let active;
+    if (ship.weaponId === 'laser') active = `LASER LVL ${ship.laserLevel}`;
+    else if (ship.weaponId === 'vulcan') active = `VULCAN ${ship.vulcanAmmo}`;
+    else active = ship.weaponId.toUpperCase();
     this.weaponEl.textContent = `${active}   ⟂ ROCKETS ×${ship.rockets}`;
 
     // Unlocked-weapon selector (1..N) with the active one highlighted.

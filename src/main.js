@@ -147,7 +147,7 @@ function spawnPickups(def) {
   });
   const drop = (type, cell) => pickups.spawn(type, cell.center.clone());
   rooms.forEach((cell, i) => {
-    const t = ['shield', 'hull', 'laser', 'rockets'][i % 4];
+    const t = ['shield', 'hull', 'vulcan', 'laser', 'rockets'][i % 5];
     drop(t, cell);
   });
 
@@ -172,9 +172,10 @@ function spawnPrisoners(def) {
 
 function maybeDropPickup(pos) {
   const r = Math.random();
-  if (r < 0.16) pickups.spawn('hull', pos.clone());
-  else if (r < 0.30) pickups.spawn('shield', pos.clone());
-  else if (r < 0.40) pickups.spawn('rockets', pos.clone());
+  if (r < 0.15) pickups.spawn('hull', pos.clone());
+  else if (r < 0.28) pickups.spawn('shield', pos.clone());
+  else if (r < 0.37) pickups.spawn('rockets', pos.clone());
+  else if (r < 0.52) pickups.spawn('vulcan', pos.clone()); // enemies often drop ammo
 }
 
 function onCollect(type, pickup) {
@@ -195,6 +196,9 @@ function onCollect(type, pickup) {
   } else if (type === 'rockets') {
     ship.rockets += 3;
     hud.toast('+3 ROCKETS');
+  } else if (type === 'vulcan') {
+    ship.vulcanAmmo += 120;
+    hud.toast('VULCAN-MUNITION +120');
   } else if (type === 'artifact') {
     score += 500; hud.setScore(score);
   }
@@ -373,6 +377,7 @@ function startCampaign() {
   ship.weaponId = 'laser';
   ship.laserLevel = 1;
   ship.rockets = 5;
+  ship.vulcanAmmo = 0;
   hud.setScore(0);
   loadLevel(0);
   hud.show();
@@ -473,6 +478,10 @@ function animate() {
       score += 250; hud.setScore(score);
     });
     mission.update(dt, ship, (kind) => hud.toast(kind.toUpperCase() + ' KEYCARD'));
+    mission.autoOpenDoors(ship, (kind) => {
+      hud.toast(kind.toUpperCase() + ' TÜR GEÖFFNET');
+      audio.door();
+    });
     updateExplosions(dt);
     particles.update(dt);
     debris.update(dt);

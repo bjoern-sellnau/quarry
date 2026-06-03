@@ -117,6 +117,14 @@ export class Mission {
     return { group, core, cage, pos: pos.clone(), hp, maxHp: hp, radius: 5 };
   }
 
+  // Generous reach for opening a door: covers the whole opening plus margin
+  // so you don't have to hit the exact centre point.
+  _doorReach(door) {
+    const r = door.rect;
+    const hu = (r.u1 - r.u0) / 2, hv = (r.v1 - r.v0) / 2;
+    return Math.sqrt(hu * hu + hv * hv) + 9;
+  }
+
   // Try to open a keycard door the ship is near. Returns a message or null.
   tryOpenDoors(ship) {
     let msg = null;
@@ -124,16 +132,29 @@ export class Mission {
       if (door.open) continue;
       if (door.kind === 'secret' || door.kind === 'exit') continue;
       const need = door.kind; // 'red'|'blue'|'yellow'
-      if (ship.position.distanceTo(door.center) < 7) {
+      if (ship.position.distanceTo(door.center) < this._doorReach(door)) {
         if (ship.keys[need]) {
           this._openDoor(door);
-          msg = need.toUpperCase() + ' DOOR OPENED';
+          msg = need.toUpperCase() + ' TÜR GEÖFFNET';
         } else {
-          msg = 'NEED ' + need.toUpperCase() + ' KEYCARD';
+          msg = need.toUpperCase() + ' KEYCARD NÖTIG';
         }
       }
     }
     return msg;
+  }
+
+  // Auto-open any keycard door you have the card for when you fly up to it.
+  autoOpenDoors(ship, onOpen) {
+    for (const door of this.level.doors) {
+      if (door.open) continue;
+      if (door.kind === 'secret' || door.kind === 'exit') continue;
+      if (!ship.keys[door.kind]) continue;
+      if (ship.position.distanceTo(door.center) < this._doorReach(door)) {
+        this._openDoor(door);
+        if (onOpen) onOpen(door.kind);
+      }
+    }
   }
 
   _openDoor(door) {

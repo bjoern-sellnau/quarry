@@ -56,6 +56,8 @@ export class Ship {
     this.maxLaserLevel = 3;
     this.rockets = 5;
     this.rocketRate = 0.7;
+    // Vulcan is ammo-based (energy weapons are unlimited, Descent-style).
+    this.vulcanAmmo = 0;
 
     // Keycards collected this level.
     this.keys = { red: false, blue: false, yellow: false };
@@ -79,7 +81,10 @@ export class Ship {
   }
 
   unlock(id) {
-    if (!this.unlocked.includes(id)) this.unlocked.push(id);
+    if (!this.unlocked.includes(id)) {
+      this.unlocked.push(id);
+      if (id === 'vulcan') this.vulcanAmmo += 250; // starter belt
+    }
     this.weaponId = id; // auto-select the newly granted weapon
   }
 
@@ -195,6 +200,8 @@ export class Ship {
   }
 
   _firePrimary(fireCallback) {
+    // Vulcan needs ammo; fall back to laser when the belt runs dry.
+    if (this.weaponId === 'vulcan' && this.vulcanAmmo <= 0) this.weaponId = 'laser';
     const w = PRIMARY[this.weaponId] || PRIMARY.laser;
     this.fireCooldown = w.rate;
     const dir = this.forward();
@@ -226,7 +233,8 @@ export class Ship {
     }
 
     if (w.spread) {
-      // Vulcan: rapid single bolt with slight random scatter.
+      // Vulcan: rapid single bolt with slight random scatter; consumes ammo.
+      this.vulcanAmmo = Math.max(0, this.vulcanAmmo - 1);
       const d = dir.clone()
         .applyAxisAngle(up, (Math.random() - 0.5) * w.spread)
         .applyAxisAngle(right, (Math.random() - 0.5) * w.spread);

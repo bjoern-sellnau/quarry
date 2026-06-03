@@ -9,6 +9,7 @@ export const PICKUP_TYPES = {
   artifact: { color: 0xffd700, light: 0xffd700, label: 'ARTIFACT  +500' },
   laser:    { color: 0x6cff7a, light: 0x6cff7a, label: 'LASER UPGRADE' },
   rockets:  { color: 0xff8844, light: 0xff8844, label: '+3 ROCKETS' },
+  vulcan:   { color: 0xffe27a, light: 0xffe27a, label: 'VULCAN-MUNITION +120' },
 };
 
 function makeMesh(type) {
