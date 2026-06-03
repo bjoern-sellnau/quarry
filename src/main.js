@@ -12,6 +12,7 @@ import { Debris } from './debris.js';
 import { AudioEngine } from './audio.js';
 import { Hud } from './hud.js';
 import { LEVELS } from './levels.js';
+import { makeWallTexture } from './textures.js';
 
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -43,6 +44,7 @@ const hud = new Hud();
 let level = null;
 let mission = null;
 let projectiles = null;
+let wallTexture = null;
 
 let enemies = [];
 let explosions = [];
@@ -54,6 +56,9 @@ let hostagesRescued = 0;
 let hostagesTotal = 0;
 let state = 'menu'; // menu | playing | levelcomplete | over
 const shipCellState = {};
+
+// Player-tunable options (set from the start screen).
+const settings = { debris: 12, debrisPersist: true };
 
 // ---------- Level loading ----------
 function loadLevel(index) {
@@ -67,15 +72,16 @@ function loadLevel(index) {
   explosions = [];
   if (mission) mission.clear();
   if (projectiles) projectiles.clear();
-  if (level) level.dispose(scene);
+  if (level) { level.dispose(scene); if (wallTexture) wallTexture.dispose(); }
   pickups.clear();
   prisoners.clear();
   particles.clear();
   debris.clear();
 
-  // Build geometry + palette.
+  // Build geometry + palette + per-level wall texture.
   level = new Level({ cells: def.cells, doors: def.doors });
-  level.build(scene);
+  wallTexture = makeWallTexture(def.style);
+  level.build(scene, wallTexture);
   scene.background = new THREE.Color(def.palette.fog);
   scene.fog = new THREE.FogExp2(def.palette.fog, 0.0035);
 
@@ -220,11 +226,19 @@ function spawnExplosion(pos, color = 0xff7a3c, scale = 1) {
 }
 
 function killEnemy(e) {
-  spawnExplosion(e.pos, 0xff7a3c, 2.4);                 // bigger blast
-  spawnExplosion(e.pos, 0xffd27a, 1.4);
-  particles.burst(e.pos, 0xffd27a, 36, 22, 0.7);
-  debris.burst(e.pos, e.cfg.color, e.cfg.big ? 14 : 9, 60); // floating wreckage, 60s
+  if (e._dead) return;          // guard against double-kill (e.g. splash + bolt)
+  e._dead = true;
+  // The body bursts apart and is removed from the scene; small wreckage chunks
+  // are flung out and persist (amount/persistence are configurable in Options).
+  spawnExplosion(e.pos, 0xffe0a0, 3.4);
+  spawnExplosion(e.pos, 0xff7a3c, 2.0);
+  particles.burst(e.pos, 0xffd27a, 50, 26, 0.85);
+  if (settings.debris > 0) {
+    const count = Math.round((e.cfg.big ? 1.6 : 1) * settings.debris);
+    debris.burst(e.pos, e.cfg.color, count, settings.debrisPersist ? Infinity : 60);
+  }
   audio.enemyKill();
+  e.destroy(scene);             // body disappears (was lingering before — bug)
   maybeDropPickup(e.pos);
   score += e.armored ? 200 : 100;
   hud.setScore(score);
@@ -257,7 +271,7 @@ function updateExplosions(dt) {
 function fire(origin, dir, opts) {
   projectiles.spawn(origin, dir, opts);
   if (opts.owner === 'player') {
-    if (opts.kind === 'rocket') audio.rocket(); else audio.shoot();
+    if (opts.kind === 'rocket') audio.rocket(); else audio.weaponSound(opts.kind);
   }
 }
 
@@ -428,6 +442,12 @@ function endGame(win, reason) {
   screenEnd.classList.remove('hidden');
   overlay.classList.remove('hidden');
 }
+
+// Options.
+const optDebris = document.getElementById('opt-debris');
+const optPersist = document.getElementById('opt-persist');
+if (optDebris) optDebris.addEventListener('change', () => { settings.debris = parseInt(optDebris.value, 10); });
+if (optPersist) optPersist.addEventListener('change', () => { settings.debrisPersist = optPersist.checked; });
 
 document.getElementById('btn-start').addEventListener('click', startCampaign);
 document.getElementById('btn-restart').addEventListener('click', () => {

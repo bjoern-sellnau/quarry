@@ -86,6 +86,20 @@ html, body {
 .bar-fill.hull { background: linear-gradient(90deg, var(--warn), var(--hull)); box-shadow: 0 0 10px var(--hull); }
 .bar-fill.shield { background: linear-gradient(90deg, var(--accent-dim), var(--shield)); box-shadow: 0 0 10px var(--shield); }
 
+.options {
+  margin: 18px auto 8px; padding: 14px 18px; max-width: 460px;
+  border: 1px solid rgba(127,212,230,0.25); border-radius: 6px;
+  background: rgba(127,212,230,0.05);
+  display: flex; flex-direction: column; gap: 10px; align-items: center;
+}
+.options h3 { margin: 0 0 4px; letter-spacing: 3px; color: var(--accent-dim); font-size: 13px; }
+.options label { display: flex; align-items: center; gap: 10px; font-size: 14px; color: #cfe0ea; }
+.options select {
+  background: #11202a; color: var(--accent); border: 1px solid rgba(127,212,230,0.4);
+  border-radius: 4px; padding: 4px 8px; font-family: inherit;
+}
+.options .opt-check { gap: 8px; }
+
 #level-name {
   position: absolute; top: 18px; left: 50%; transform: translateX(-50%);
   font-size: 15px; letter-spacing: 5px; color: var(--accent);

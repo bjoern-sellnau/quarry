@@ -101,8 +101,8 @@ function makeLevel(cfg) {
     { depth: 26 * S, cross: [12 * S, 9 * S] },
     { color: pal.exit, kind: 'exit', door: 'exit' });
 
-  // Secret vault with the RED keycard, reached by shooting a secret door
-  // hidden on the second spine chamber (-x), via a crawlway.
+  // Secret vault (artifact reward), reached by shooting a secret door hidden
+  // on the second spine chamber (-x), via a crawlway.
   const secretAnchor = spine[Math.min(1, spine.length - 1)];
   const secretVault = b.corridor(secretAnchor, '-x',
     { depth: 16 * S, cross: [3, 3] },
@@ -118,6 +118,7 @@ function makeLevel(cfg) {
   return {
     name: cfg.name,
     palette: pal,
+    style: cfg.style,
     cells: b.cells,
     doors: b.doors,
     startCell: hub,
@@ -128,14 +129,18 @@ function makeLevel(cfg) {
     exitCell: exit,
     prisonCells,
     secretCells: [secretVault, secret2],
+    // Sensible lock-and-key chain: the YELLOW card lies in the open; it unlocks
+    // the yellow zone (prison wing), which holds BOTH the RED card (reactor) and
+    // the BLUE card (hostage cells). So the red card is never outside the yellow
+    // zone. Secret vaults hold artifacts only.
     keycards: [
       { kind: 'yellow', cell: yellowCell, dy: 6 * S },
-      { kind: 'red', cell: secretVault, dy: 0 },
-      { kind: 'blue', cell: prisonHall, dy: 0, dz: -6 * S },
+      { kind: 'red', cell: prisonHall, dz: 6 * S },
+      { kind: 'blue', cell: prisonHall, dz: -6 * S },
     ],
     enemyTypes: cfg.enemyTypes,
     enemyCount: cfg.enemyCount,
-    weapon: cfg.weapon,         // primary weapon granted on entering this level
+    weapon: cfg.weapon,
     weaponLabel: cfg.weaponLabel,
   };
 }
@@ -143,7 +148,7 @@ function makeLevel(cfg) {
 // Palettes per level for visual variety.
 const LEVELS = [
   makeLevel({
-    name: 'I — BOHRSCHACHT',
+    name: 'I — BOHRSCHACHT', style: 'rock',
     scale: 1.0, spineCount: 3, hostages: 2, reactorHp: 1400, enemyCount: 10,
     enemyTypes: ['drone'],
     weapon: 'vulcan', weaponLabel: 'VULCAN-KANONE',
@@ -151,7 +156,7 @@ const LEVELS = [
       reactor: 0x6e2e2e, prison: 0x3f5246, cell: 0x35463b, exit: 0x3a5a48, secret: 0x2f4538, fog: 0x0e151d },
   }),
   makeLevel({
-    name: 'II — EISGROTTE',
+    name: 'II — EISGROTTE', style: 'ice',
     scale: 1.15, spineCount: 4, hostages: 2, reactorHp: 2000, enemyCount: 13,
     enemyTypes: ['drone', 'sentry'],
     weapon: 'spread', weaponLabel: 'SPREADFIRE',
@@ -159,7 +164,7 @@ const LEVELS = [
       reactor: 0x6e2e3e, prison: 0x3f5256, cell: 0x35464b, exit: 0x3a5a58, secret: 0x2f4548, fog: 0x0c1620 },
   }),
   makeLevel({
-    name: 'III — MAGMAKERN',
+    name: 'III — MAGMAKERN', style: 'magma',
     scale: 1.25, spineCount: 4, hostages: 3, reactorHp: 2600, enemyCount: 16,
     enemyTypes: ['drone', 'sentry', 'kamikaze'],
     weapon: 'plasma', weaponLabel: 'PLASMA-WERFER',
@@ -167,7 +172,7 @@ const LEVELS = [
       reactor: 0x8e2e1e, prison: 0x5a4a36, cell: 0x46402b, exit: 0x5a5a38, secret: 0x45382f, fog: 0x18100a },
   }),
   makeLevel({
-    name: 'IV — KRISTALLABYRINTH',
+    name: 'IV — KRISTALLABYRINTH', style: 'crystal',
     scale: 1.35, spineCount: 5, hostages: 3, reactorHp: 3200, enemyCount: 19,
     enemyTypes: ['drone', 'sentry', 'kamikaze', 'wraith'],
     weapon: 'fusion', weaponLabel: 'FUSIONSKANONE',
@@ -175,7 +180,7 @@ const LEVELS = [
       reactor: 0x6e2e6e, prison: 0x46467e, cell: 0x3b3b56, exit: 0x3a5a78, secret: 0x2f2f58, fog: 0x0c0c20 },
   }),
   makeLevel({
-    name: 'V — REAKTORZITADELLE',
+    name: 'V — REAKTORZITADELLE', style: 'metal',
     scale: 1.5, spineCount: 6, hostages: 4, reactorHp: 4200, enemyCount: 24,
     enemyTypes: ['drone', 'sentry', 'kamikaze', 'wraith', 'hexen'],
     weapon: 'helix', weaponLabel: 'HELIX-GESCHÜTZ',

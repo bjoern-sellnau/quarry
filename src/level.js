@@ -141,11 +141,13 @@ export class Level {
   // Everything is merged into a single wall mesh (vertex-coloured) plus a
   // single line mesh for the panel outlines. Two draw calls for the whole
   // mine instead of hundreds — far cheaper to render.
-  build(scene) {
+  build(scene, texture) {
     const positions = [];
     const normals = [];
     const colors = [];
+    const uvs = [];
     const linePos = [];
+    const TILE = 7; // world units per texture tile
 
     const ab = new THREE.Vector3();
     const ad = new THREE.Vector3();
@@ -154,6 +156,7 @@ export class Level {
     for (const cell of this.cells) {
       const col = new THREE.Color(cell.color);
       for (const key of Object.keys(FACES)) {
+        const [t0, t1] = FACES[key].t; // tangent axes for UVs
         const quads = this._faceQuads(cell, key);
         for (const q of quads) {
           const [a, b, c, d] = q.pts;
@@ -164,8 +167,8 @@ export class Level {
             positions.push(v.x, v.y, v.z);
             normals.push(nrm.x, nrm.y, nrm.z);
             colors.push(col.r, col.g, col.b);
+            uvs.push(v[t0] / TILE, v[t1] / TILE);
           }
-          // Panel outline (4 edges).
           for (const [p, q2] of [[a, b], [b, c], [c, d], [d, a]]) {
             linePos.push(p.x, p.y, p.z, q2.x, q2.y, q2.z);
           }
@@ -177,9 +180,11 @@ export class Level {
     geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
     geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     const mat = new THREE.MeshStandardMaterial({
       vertexColors: true,
-      roughness: 0.85,
+      map: texture || null,
+      roughness: 0.9,
       metalness: 0.15,
       emissive: 0x141d24,
       emissiveIntensity: 1.0,

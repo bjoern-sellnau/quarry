@@ -10,7 +10,7 @@
   <canvas id="game"></canvas>
 
   <!-- Build/version stamp (bumped on every build) -->
-  <div id="build-stamp">quarry | pre-alpha | build 0.25</div>
+  <div id="build-stamp">quarry | pre-alpha | build 0.26</div>
 
   <!-- HUD -->
   <div id="hud" class="hidden">
@@ -89,6 +89,20 @@
             <div><kbd>Shift</kbd> Boost &nbsp; <kbd>Esc</kbd> Maus frei</div>
             <div class="hint">5 Sektoren. Jeder bringt eine neue Waffe (Vulcan, Spreadfire, Plasma, Fusion, Helix) und einen neuen Gegnertyp — Waffen nimmst du mit. Keycards finden, Geiseln retten, Reaktor sprengen (rote Tür), durch den Notausgang fliehen, bevor der Countdown abläuft. Geheimtüren öffnen sich beim Beschuss.</div>
           </div>
+        </div>
+        <div class="options">
+          <h3>OPTIONS</h3>
+          <label>Trümmerteile
+            <select id="opt-debris">
+              <option value="0">Aus</option>
+              <option value="6">Wenig</option>
+              <option value="12" selected>Normal</option>
+              <option value="24">Viel</option>
+            </select>
+          </label>
+          <label class="opt-check">
+            <input type="checkbox" id="opt-persist" checked /> Trümmer bleiben liegen
+          </label>
         </div>
         <button id="btn-start" class="btn">KAMPAGNE STARTEN</button>
         <p class="lock-note">Klick aktiviert die Maussteuerung (Pointer Lock).</p>

@@ -14,22 +14,29 @@ export function distSqPointSegment(c, a, b) {
   return dx * dx + dy * dy + dz * dz;
 }
 
-const LASER_GEO = new THREE.CapsuleGeometry(0.16, 1.4, 4, 8);
+// Long, thin glowing bolts — that classic Descent energy-streak look.
+const LASER_GEO = new THREE.CylinderGeometry(0.11, 0.11, 3.0, 6);
+const BIG_GEO = new THREE.CylinderGeometry(0.26, 0.16, 3.6, 8);
+LASER_GEO.rotateX(Math.PI / 2); // align length with +Z so it points along travel
+BIG_GEO.rotateX(Math.PI / 2);
 const ROCKET_GEO = new THREE.CapsuleGeometry(0.3, 1.0, 6, 10);
-const BIG_GEO = new THREE.CapsuleGeometry(0.34, 1.8, 6, 10);
-const ENEMY_GEO = new THREE.SphereGeometry(0.35, 8, 8);
+const ENEMY_GEO = new THREE.SphereGeometry(0.4, 8, 8);
 const Z = new THREE.Vector3(0, 0, 1);
 
-// Cache one material per bolt colour so we never allocate per shot and never
-// add lights (which would force shader recompiles).
+// Cache one additive-blended material per bolt colour so bolts glow like
+// energy and we never allocate per shot or add lights (no shader recompiles).
 const COLOR_MATS = new Map();
 function matFor(color) {
   if (!COLOR_MATS.has(color)) {
-    COLOR_MATS.set(color, new THREE.MeshBasicMaterial({ color }));
+    COLOR_MATS.set(color, new THREE.MeshBasicMaterial({
+      color, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false,
+    }));
   }
   return COLOR_MATS.get(color);
 }
-const ENEMY_MAT = new THREE.MeshBasicMaterial({ color: 0xff5a3c });
+const ENEMY_MAT = new THREE.MeshBasicMaterial({
+  color: 0xff5a3c, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false,
+});
 
 export class Projectiles {
   constructor(scene, level) {

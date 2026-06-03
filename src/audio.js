@@ -74,10 +74,41 @@ export class AudioEngine {
   }
 
   // ---- SFX ----
+  // A bright, fast downward zap — the classic energy-bolt "dzew".
   shoot() {
     if (!this.enabled) return;
     const t = this.ctx.currentTime;
-    this._tone(880, 0.10, t, 'square', 0.16, 220);
+    this._tone(1400, 0.12, t, 'sawtooth', 0.13, 260);
+    this._tone(2300, 0.06, t, 'square', 0.05, 700);
+  }
+
+  // Per-weapon firing sound. Kept short — some weapons fire very fast.
+  weaponSound(kind) {
+    if (!this.enabled) return;
+    const t = this.ctx.currentTime;
+    switch (kind) {
+      case 'vulcan': // dry rapid pop
+        this._tone(420, 0.045, t, 'square', 0.09, 160);
+        this._noise(0.04, t, 'bandpass', 1800, 0.12);
+        break;
+      case 'spread': // layered triple
+        this._tone(900, 0.12, t, 'sawtooth', 0.10, 300);
+        this._tone(1300, 0.10, t, 'square', 0.05, 360);
+        break;
+      case 'plasma': // rising zap
+        this._tone(600, 0.14, t, 'sawtooth', 0.13, 1500);
+        break;
+      case 'fusion': // deep heavy boom
+        this._tone(150, 0.32, t, 'sawtooth', 0.30, 60);
+        this._noise(0.3, t, 'lowpass', 700, 0.25);
+        break;
+      case 'helix': // two-tone warble
+        this._tone(1100, 0.12, t, 'triangle', 0.11, 500);
+        this._tone(760, 0.12, t + 0.03, 'triangle', 0.09, 380);
+        break;
+      default: // laser
+        this.shoot();
+    }
   }
   rocket() {
     if (!this.enabled) return;
